@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,6 +36,11 @@ interface RoomData {
     state: string;
 }
 
+interface ValidationErrors {
+    discussionTime?: string;
+    categories?: string;
+}
+
 const CATEGORIES = ['Animals', 'Food', 'Movies', 'Sports', 'Countries'];
 
 export default function LobbyPage() {
@@ -46,21 +51,76 @@ export default function LobbyPage() {
     const [room, setRoom] = useState<RoomData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isStarting, setIsStarting] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     const [showSettingsDialog, setShowSettingsDialog] = useState(false);
 
-    // Local state for settings editing
-    const [editingSettings, setEditingSettings] = useState<Partial<GameSettings>>({});
+    // Local state for settings editing - using string for input to allow empty values
+    const [editGameType, setEditGameType] = useState<'word' | 'question' | null>(null);
+    const [editImposterCount, setEditImposterCount] = useState<number | null>(null);
+    const [editDiscussionTime, setEditDiscussionTime] = useState<string>('');
+    const [editCategories, setEditCategories] = useState<string[] | null>(null);
+    const [errors, setErrors] = useState<ValidationErrors>({});
 
     const playerId = typeof window !== 'undefined' ? localStorage.getItem('imposter_player_id') : null;
     const storedRoomId = typeof window !== 'undefined' ? localStorage.getItem('imposter_room_id') : null;
 
     const isHost = room?.hostId === playerId;
 
+    // Initialize editing values when dialog opens
     useEffect(() => {
-        // Check if user has session for this room
+        if (showSettingsDialog && room) {
+            setEditGameType(null);
+            setEditImposterCount(null);
+            setEditDiscussionTime(room.settings.discussionTimeSeconds.toString());
+            setEditCategories(null);
+            setErrors({});
+        }
+    }, [showSettingsDialog, room]);
+
+    // Validate discussion time
+    const validateDiscussionTime = (value: string): string | undefined => {
+        if (!value.trim()) {
+            return 'Discussion time is required';
+        }
+        const num = parseInt(value);
+        if (isNaN(num)) {
+            return 'Please enter a valid number';
+        }
+        if (num < 30) {
+            return 'Minimum is 30 seconds';
+        }
+        if (num > 600) {
+            return 'Maximum is 600 seconds (10 minutes)';
+        }
+        return undefined;
+    };
+
+    // Get current effective values (edited or original)
+    const currentGameType = editGameType ?? room?.settings.gameType ?? 'word';
+    const currentImposterCount = editImposterCount ?? room?.settings.imposterCount ?? 1;
+    const currentCategories = editCategories ?? room?.settings.categories ?? [];
+
+    // Check if any settings have changed
+    const hasChanges = useMemo(() => {
+        if (!room) return false;
+        return (
+            (editGameType !== null && editGameType !== room.settings.gameType) ||
+            (editImposterCount !== null && editImposterCount !== room.settings.imposterCount) ||
+            editDiscussionTime !== room.settings.discussionTimeSeconds.toString() ||
+            (editCategories !== null && JSON.stringify(editCategories) !== JSON.stringify(room.settings.categories))
+        );
+    }, [room, editGameType, editImposterCount, editDiscussionTime, editCategories]);
+
+    // Check if form is valid
+    const isFormValid = useMemo(() => {
+        const timeError = validateDiscussionTime(editDiscussionTime);
+        const catError = currentCategories.length === 0 ? 'Select at least one category' : undefined;
+        return !timeError && !catError;
+    }, [editDiscussionTime, currentCategories]);
+
+    useEffect(() => {
         const storedRoomCode = localStorage.getItem('imposter_room_code');
         if (!storedRoomId || storedRoomCode !== roomCode) {
-            // No session - redirect to join page
             router.push(`/room/${roomCode}`);
             return;
         }
@@ -70,7 +130,6 @@ export default function LobbyPage() {
                 const roomData = await trpcQuery<RoomData>('room.getState', { roomId: storedRoomId }, { 'x-player-id': playerId || '' });
                 setRoom(roomData);
 
-                // If game is in progress, redirect to game
                 if (roomData?.state === 'playing') {
                     router.push(`/room/${roomCode}/game`);
                 }
@@ -103,16 +162,66 @@ export default function LobbyPage() {
         }
     };
 
-    const handleUpdateSettings = async () => {
-        if (!storedRoomId || !playerId || Object.keys(editingSettings).length === 0) return;
+    const handleDiscussionTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
+        setEditDiscussionTime(value);
 
+        // Validate on change
+        const error = validateDiscussionTime(value);
+        setErrors((prev) => ({ ...prev, discussionTime: error }));
+    };
+
+    const handleCategoryToggle = (cat: string) => {
+        const currentCats = editCategories ?? room?.settings.categories ?? [];
+        const isSelected = currentCats.includes(cat);
+        const newCats = isSelected
+            ? currentCats.filter((c) => c !== cat)
+            : [...currentCats, cat];
+
+        setEditCategories(newCats);
+
+        // Validate categories
+        if (newCats.length === 0) {
+            setErrors((prev) => ({ ...prev, categories: 'Select at least one category' }));
+        } else {
+            setErrors((prev) => ({ ...prev, categories: undefined }));
+        }
+    };
+
+    const handleUpdateSettings = async () => {
+        if (!storedRoomId || !playerId || !hasChanges) return;
+
+        // Final validation
+        const timeError = validateDiscussionTime(editDiscussionTime);
+        if (timeError) {
+            setErrors((prev) => ({ ...prev, discussionTime: timeError }));
+            return;
+        }
+
+        if (currentCategories.length === 0) {
+            setErrors((prev) => ({ ...prev, categories: 'Select at least one category' }));
+            return;
+        }
+
+        // Build update object with only changed values
+        const updates: Partial<GameSettings> = {};
+        if (editGameType !== null) updates.gameType = editGameType;
+        if (editImposterCount !== null) updates.imposterCount = editImposterCount;
+        if (editDiscussionTime !== room?.settings.discussionTimeSeconds.toString()) {
+            updates.discussionTimeSeconds = parseInt(editDiscussionTime);
+        }
+        if (editCategories !== null) updates.categories = editCategories;
+
+        setIsSaving(true);
         try {
-            await trpcMutation('room.updateSettings', { roomId: storedRoomId, settings: editingSettings }, { 'x-player-id': playerId });
+            await trpcMutation('room.updateSettings', { roomId: storedRoomId, settings: updates }, { 'x-player-id': playerId });
             toast.success('Settings updated!');
             setShowSettingsDialog(false);
-            setEditingSettings({});
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'Failed to update settings');
+            console.error('Settings update error:', error);
+            // Don't show toast, error is already visible in form
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -229,22 +338,24 @@ export default function LobbyPage() {
                                                 <DialogTitle>Game Settings</DialogTitle>
                                                 <DialogDescription>Configure the game options</DialogDescription>
                                             </DialogHeader>
-                                            <div className="space-y-4 pt-4">
+                                            <div className="space-y-5 pt-4">
                                                 {/* Game Type */}
                                                 <div>
                                                     <label className="text-sm font-medium">Game Type</label>
                                                     <div className="flex gap-2 mt-2">
                                                         <Button
-                                                            variant={editingSettings.gameType === 'word' || (!editingSettings.gameType && room.settings.gameType === 'word') ? 'default' : 'outline'}
-                                                            onClick={() => setEditingSettings({ ...editingSettings, gameType: 'word' })}
+                                                            variant={currentGameType === 'word' ? 'default' : 'outline'}
+                                                            onClick={() => setEditGameType('word')}
                                                             className="flex-1"
+                                                            type="button"
                                                         >
                                                             🎯 Word
                                                         </Button>
                                                         <Button
-                                                            variant={editingSettings.gameType === 'question' || (!editingSettings.gameType && room.settings.gameType === 'question') ? 'default' : 'outline'}
-                                                            onClick={() => setEditingSettings({ ...editingSettings, gameType: 'question' })}
+                                                            variant={currentGameType === 'question' ? 'default' : 'outline'}
+                                                            onClick={() => setEditGameType('question')}
                                                             className="flex-1"
+                                                            type="button"
                                                         >
                                                             ❓ Question
                                                         </Button>
@@ -258,13 +369,10 @@ export default function LobbyPage() {
                                                         {[1, 2, 3].map((count) => (
                                                             <Button
                                                                 key={count}
-                                                                variant={
-                                                                    editingSettings.imposterCount === count ||
-                                                                        (!editingSettings.imposterCount && room.settings.imposterCount === count)
-                                                                        ? 'default' : 'outline'
-                                                                }
-                                                                onClick={() => setEditingSettings({ ...editingSettings, imposterCount: count })}
+                                                                variant={currentImposterCount === count ? 'default' : 'outline'}
+                                                                onClick={() => setEditImposterCount(count)}
                                                                 className="flex-1"
+                                                                type="button"
                                                             >
                                                                 {count}
                                                             </Button>
@@ -276,16 +384,17 @@ export default function LobbyPage() {
                                                 <div>
                                                     <label className="text-sm font-medium">Discussion Time (seconds)</label>
                                                     <Input
-                                                        type="number"
-                                                        min={30}
-                                                        max={600}
-                                                        value={editingSettings.discussionTimeSeconds ?? room.settings.discussionTimeSeconds}
-                                                        onChange={(e) => setEditingSettings({
-                                                            ...editingSettings,
-                                                            discussionTimeSeconds: parseInt(e.target.value) || 120
-                                                        })}
-                                                        className="mt-2"
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        pattern="[0-9]*"
+                                                        value={editDiscussionTime}
+                                                        onChange={handleDiscussionTimeChange}
+                                                        className={`mt-2 ${errors.discussionTime ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+                                                        placeholder="30-600"
                                                     />
+                                                    {errors.discussionTime && (
+                                                        <p className="text-sm text-red-500 mt-1">{errors.discussionTime}</p>
+                                                    )}
                                                 </div>
 
                                                 {/* Categories */}
@@ -293,31 +402,31 @@ export default function LobbyPage() {
                                                     <label className="text-sm font-medium">Categories</label>
                                                     <div className="flex flex-wrap gap-2 mt-2">
                                                         {CATEGORIES.map((cat) => {
-                                                            const currentCats = editingSettings.categories ?? room.settings.categories;
-                                                            const isSelected = currentCats.includes(cat);
+                                                            const isSelected = currentCategories.includes(cat);
                                                             return (
                                                                 <Button
                                                                     key={cat}
                                                                     variant={isSelected ? 'default' : 'outline'}
                                                                     size="sm"
-                                                                    onClick={() => {
-                                                                        const newCats = isSelected
-                                                                            ? currentCats.filter((c) => c !== cat)
-                                                                            : [...currentCats, cat];
-                                                                        if (newCats.length > 0) {
-                                                                            setEditingSettings({ ...editingSettings, categories: newCats });
-                                                                        }
-                                                                    }}
+                                                                    onClick={() => handleCategoryToggle(cat)}
+                                                                    type="button"
                                                                 >
                                                                     {cat}
                                                                 </Button>
                                                             );
                                                         })}
                                                     </div>
+                                                    {errors.categories && (
+                                                        <p className="text-sm text-red-500 mt-1">{errors.categories}</p>
+                                                    )}
                                                 </div>
 
-                                                <Button className="w-full" onClick={handleUpdateSettings}>
-                                                    Save Settings
+                                                <Button
+                                                    className="w-full"
+                                                    onClick={handleUpdateSettings}
+                                                    disabled={!hasChanges || !isFormValid || isSaving}
+                                                >
+                                                    {isSaving ? 'Saving...' : 'Save Settings'}
                                                 </Button>
                                             </div>
                                         </DialogContent>

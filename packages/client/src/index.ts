@@ -4,7 +4,7 @@
  * Type-safe client using tRPC's recommended inference patterns.
  */
 
-import { createTRPCClient, httpBatchLink, splitLink, unstable_httpSubscriptionLink } from '@trpc/client';
+import { createTRPCClient, httpBatchLink, wsLink, createWSClient, splitLink } from '@trpc/client';
 import superjson from 'superjson';
 import type { AppRouter } from '@imposter/server/src/router.js';
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
@@ -30,14 +30,15 @@ export function createClient(options: {
     playerId?: string;
     roomId?: string;
 }) {
+    const wsClient = createWSClient({
+        url: options.url.replace('http', 'ws'),
+    });
+
     return createTRPCClient<AppRouter>({
         links: [
             splitLink({
                 condition: (op) => op.type === 'subscription',
-                true: unstable_httpSubscriptionLink({
-                    url: options.url,
-                    transformer: superjson,
-                }),
+                true: wsLink({ client: wsClient, transformer: superjson }),
                 false: httpBatchLink({
                     url: options.url,
                     transformer: superjson,

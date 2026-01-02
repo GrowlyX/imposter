@@ -43,7 +43,7 @@ export default function HomePage() {
       localStorage.setItem('imposter_server_id', result.serverId);
 
       toast.success('Room created!');
-      router.push(`/room/${result.roomCode}`);
+      router.push(`/room/${result.roomCode}/lobby`);
     } catch (error) {
       toast.error('Failed to create room. Please try again.');
       console.error(error);
@@ -79,7 +79,7 @@ export default function HomePage() {
       localStorage.setItem('imposter_server_id', result.serverId);
 
       toast.success('Joined room!');
-      router.push(`/room/${result.roomCode}`);
+      router.push(`/room/${result.roomCode}/lobby`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to join room');
       console.error(error);
