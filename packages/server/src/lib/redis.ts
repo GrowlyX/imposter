@@ -83,3 +83,60 @@ export async function deleteMeetingId(roomId: string): Promise<void> {
     const key = `${MEETING_PREFIX}${roomId}`;
     await redis.del(key);
 }
+
+// Typing indicator storage (Redis-backed with TTL auto-expire)
+const TYPING_PREFIX = 'typing:';
+const TYPING_TTL_SECONDS = 3;
+
+export interface TypingPlayer {
+    playerId: string;
+    playerName: string;
+}
+
+export async function setPlayerTyping(roomId: string, player: TypingPlayer): Promise<void> {
+    const key = `${TYPING_PREFIX}${roomId}`;
+    await redis.hset(key, player.playerId, JSON.stringify(player));
+    await redis.expire(key, TYPING_TTL_SECONDS);
+}
+
+export async function removePlayerTyping(roomId: string, playerId: string): Promise<void> {
+    const key = `${TYPING_PREFIX}${roomId}`;
+    await redis.hdel(key, playerId);
+}
+
+export async function getTypingPlayers(roomId: string): Promise<TypingPlayer[]> {
+    const key = `${TYPING_PREFIX}${roomId}`;
+    const data = await redis.hgetall(key);
+    return Object.values(data).map((v) => JSON.parse(v));
+}
+
+// Get all room IDs for reconciler cleanup
+export async function getAllRoomIds(): Promise<string[]> {
+    const roomIds: string[] = [];
+    let cursor = '0';
+    do {
+        const result = await redis.scan(cursor, 'MATCH', `${ROOM_PREFIX}*`, 'COUNT', 100);
+        cursor = result[0];
+        for (const key of result[1]) {
+            roomIds.push(key.replace(ROOM_PREFIX, ''));
+        }
+    } while (cursor !== '0');
+    return roomIds;
+}
+
+// Update player connection status
+export async function updatePlayerConnection(
+    roomId: string,
+    playerId: string,
+    isConnected: boolean
+): Promise<void> {
+    const room = await getRoomById(roomId);
+    if (!room) return;
+
+    const player = room.players.find((p) => p.id === playerId);
+    if (player) {
+        player.isConnected = isConnected;
+        await saveRoom(room);
+    }
+}
+

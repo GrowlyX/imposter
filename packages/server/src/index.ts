@@ -2,6 +2,7 @@ import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { config } from './config.js';
 import { getAllCategoryNames } from './data/categories.js';
 import { getReconcilerStatus, startReconciler, stopReconciler } from './lib/reconciler.js';
+import { updatePlayerConnection } from './lib/redis.js';
 import { appRouter } from './router.js';
 
 console.log(`Imposter Game Server running on http://localhost:${config.port}`);
@@ -84,7 +85,12 @@ const server = Bun.serve({
     },
     websocket: {
         open(ws) {
-            console.log('WebSocket connection opened');
+            const data = ws.data as unknown as { playerId?: string; roomId?: string } | undefined;
+            const { playerId, roomId } = data ?? {};
+            console.log(`WebSocket connection opened: player=${playerId}, room=${roomId}`);
+            if (playerId && roomId) {
+                updatePlayerConnection(roomId, playerId, true);
+            }
         },
         message(ws, message) {
             // WebSocket message handling for tRPC subscriptions
@@ -92,7 +98,12 @@ const server = Bun.serve({
             console.log('WebSocket message received:', message);
         },
         close(ws) {
-            console.log('WebSocket connection closed');
+            const data = ws.data as unknown as { playerId?: string; roomId?: string } | undefined;
+            const { playerId, roomId } = data ?? {};
+            console.log(`WebSocket connection closed: player=${playerId}, room=${roomId}`);
+            if (playerId && roomId) {
+                updatePlayerConnection(roomId, playerId, false);
+            }
         },
     },
 });

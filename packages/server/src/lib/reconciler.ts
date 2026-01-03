@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import { config } from '../config.js';
-import { deleteMeetingId, getMeetingId, getRoomById, redis } from './redis.js';
+import { deleteRoom, deleteMeetingId, getAllRoomIds, getMeetingId, getRoomById, redis } from './redis.js';
 
 // Leader election constants
 const LEADER_KEY = 'reconciler:leader';
@@ -152,8 +152,52 @@ async function runReconciliation(): Promise<void> {
         if (cleaned > 0) {
             console.log(`[Reconciler] Reconciliation complete: cleaned ${cleaned} stale meetings`);
         }
+
+        // Also clean up abandoned rooms
+        await cleanupAbandonedRooms();
     } catch (error) {
         console.error('[Reconciler] Error during reconciliation:', error);
+    }
+}
+
+/**
+ * Clean up rooms where host disconnected or no players are connected
+ */
+async function cleanupAbandonedRooms(): Promise<void> {
+    try {
+        const roomIds = await getAllRoomIds();
+        let cleaned = 0;
+
+        for (const roomId of roomIds) {
+            const room = await getRoomById(roomId);
+            if (!room) continue;
+
+            const connectedPlayers = room.players.filter((p) => p.isConnected);
+            const host = room.players.find((p) => p.id === room.hostId);
+            const hostConnected = host?.isConnected ?? false;
+
+            // Delete if host disconnected or no connected players
+            if (!hostConnected || connectedPlayers.length === 0) {
+                // Clean up meeting if exists
+                const meetingId = await getMeetingId(roomId);
+                if (meetingId) {
+                    await deleteCloudfareMeeting(meetingId);
+                    await deleteMeetingId(roomId);
+                }
+
+                await deleteRoom(room);
+                cleaned++;
+                console.log(
+                    `[Reconciler] Deleted abandoned room ${roomId} (host: ${hostConnected ? 'connected' : 'disconnected'}, players: ${connectedPlayers.length})`
+                );
+            }
+        }
+
+        if (cleaned > 0) {
+            console.log(`[Reconciler] Room cleanup complete: deleted ${cleaned} abandoned rooms`);
+        }
+    } catch (error) {
+        console.error('[Reconciler] Error during room cleanup:', error);
     }
 }
 

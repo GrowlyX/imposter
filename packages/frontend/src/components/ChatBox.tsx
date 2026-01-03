@@ -1,11 +1,12 @@
 'use client';
 
+import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { trpcMutation, trpcQuery } from '@/lib/api';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface ChatMessage {
     id: string;
@@ -14,6 +15,11 @@ interface ChatMessage {
     playerName: string;
     content: string;
     timestamp: number;
+}
+
+interface TypingPlayer {
+    playerId: string;
+    playerName: string;
 }
 
 interface ChatBoxProps {
@@ -28,9 +34,14 @@ export function ChatBox({ roomId, playerId, playerName }: ChatBoxProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
+    const [typingPlayers, setTypingPlayers] = useState<TypingPlayer[]>([]);
+
     const scrollAreaRef = useRef<HTMLDivElement>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
     const lastMessageIdRef = useRef<string | null>(null);
+    const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isTypingRef = useRef(false);
 
     // Fetch chat history and poll for new messages
     const fetchMessages = useCallback(async () => {
@@ -57,14 +68,72 @@ export function ChatBox({ roomId, playerId, playerName }: ChatBoxProps) {
         }
     }, [roomId, playerId]);
 
+    // Fetch typing players
+    const fetchTyping = useCallback(async () => {
+        try {
+            const players = await trpcQuery<TypingPlayer[]>(
+                'chat.getTyping',
+                { roomId },
+                { 'x-player-id': playerId }
+            );
+            // Filter out self
+            setTypingPlayers(players.filter((p) => p.playerId !== playerId));
+        } catch (error) {
+            console.error('Failed to fetch typing state:', error);
+        }
+    }, [roomId, playerId]);
+
     useEffect(() => {
         fetchMessages();
-        const interval = setInterval(fetchMessages, 1500); // Poll every 1.5s
-        return () => clearInterval(interval);
+        const messageInterval = setInterval(fetchMessages, 1500); // Poll every 1.5s
+        return () => clearInterval(messageInterval);
     }, [fetchMessages]);
+
+    useEffect(() => {
+        const typingInterval = setInterval(fetchTyping, 1000); // Poll every 1s
+        return () => clearInterval(typingInterval);
+    }, [fetchTyping]);
+
+    // Handle typing indicator with debounce
+    const handleTyping = useCallback(() => {
+        if (!isTypingRef.current) {
+            isTypingRef.current = true;
+            trpcMutation('chat.startTyping', { roomId }, { 'x-player-id': playerId }).catch(
+                console.error
+            );
+        }
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+            isTypingRef.current = false;
+            trpcMutation('chat.stopTyping', { roomId }, { 'x-player-id': playerId }).catch(
+                console.error
+            );
+        }, 2000);
+    }, [roomId, playerId]);
+
+    // Clear typing state on unmount
+    useEffect(() => {
+        return () => {
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            if (isTypingRef.current) {
+                trpcMutation('chat.stopTyping', { roomId }, { 'x-player-id': playerId }).catch(
+                    console.error
+                );
+            }
+        };
+    }, [roomId, playerId]);
 
     const handleSend = async () => {
         if (!newMessage.trim() || isSending || newMessage.length > MAX_MESSAGE_LENGTH) return;
+
+        // Stop typing indicator when sending
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        if (isTypingRef.current) {
+            isTypingRef.current = false;
+            trpcMutation('chat.stopTyping', { roomId }, { 'x-player-id': playerId }).catch(
+                console.error
+            );
+        }
 
         setIsSending(true);
         try {
@@ -80,6 +149,9 @@ export function ChatBox({ roomId, playerId, playerName }: ChatBoxProps) {
             // Optimistically add message
             setMessages((prev) => [...prev, message]);
             setNewMessage('');
+
+            // Re-focus input after sending
+            inputRef.current?.focus();
 
             setTimeout(() => {
                 bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -98,17 +170,33 @@ export function ChatBox({ roomId, playerId, playerName }: ChatBoxProps) {
         }
     };
 
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setNewMessage(e.target.value);
+        if (e.target.value.trim()) {
+            handleTyping();
+        }
+    };
+
     const formatTime = (timestamp: number) => {
         return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
+
+    // Typing indicator text
+    const typingText = useMemo(() => {
+        if (typingPlayers.length === 0) return null;
+        if (typingPlayers.length === 1) return `${typingPlayers[0].playerName} is typing...`;
+        if (typingPlayers.length === 2)
+            return `${typingPlayers[0].playerName} and ${typingPlayers[1].playerName} are typing...`;
+        return `${typingPlayers.length} people are typing...`;
+    }, [typingPlayers]);
 
     const charCount = newMessage.length;
     const isOverLimit = charCount > MAX_MESSAGE_LENGTH;
     const charIndicatorColor = isOverLimit
         ? 'text-red-500'
         : charCount > MAX_MESSAGE_LENGTH * 0.9
-          ? 'text-yellow-500'
-          : 'text-muted-foreground';
+            ? 'text-yellow-500'
+            : 'text-muted-foreground';
 
     return (
         <Card className="h-full flex flex-col">
@@ -134,20 +222,26 @@ export function ChatBox({ roomId, playerId, playerName }: ChatBoxProps) {
                                     className={`flex flex-col ${msg.playerId === playerId ? 'items-end' : 'items-start'}`}
                                 >
                                     <div
-                                        className={`max-w-[85%] rounded-lg px-3 py-2 ${
-                                            msg.playerId === playerId
-                                                ? 'bg-primary text-primary-foreground'
-                                                : 'bg-muted'
-                                        }`}
+                                        className={`flex gap-2 max-w-[85%] ${msg.playerId === playerId ? 'flex-row-reverse' : 'flex-row'}`}
                                     >
                                         {msg.playerId !== playerId && (
-                                            <p className="text-xs font-medium mb-1 opacity-70">
-                                                {msg.playerName}
-                                            </p>
+                                            <Avatar name={msg.playerName} size="sm" />
                                         )}
-                                        <p className="text-sm break-words whitespace-pre-wrap">
-                                            {msg.content}
-                                        </p>
+                                        <div
+                                            className={`rounded-lg px-3 py-2 ${msg.playerId === playerId
+                                                    ? 'bg-primary text-primary-foreground'
+                                                    : 'bg-muted'
+                                                }`}
+                                        >
+                                            {msg.playerId !== playerId && (
+                                                <p className="text-xs font-medium mb-1 opacity-70">
+                                                    {msg.playerName}
+                                                </p>
+                                            )}
+                                            <p className="text-sm break-words whitespace-pre-wrap">
+                                                {msg.content}
+                                            </p>
+                                        </div>
                                     </div>
                                     <span className="text-xs text-muted-foreground mt-1">
                                         {formatTime(msg.timestamp)}
@@ -159,12 +253,19 @@ export function ChatBox({ roomId, playerId, playerName }: ChatBoxProps) {
                     </div>
                 </ScrollArea>
 
+                {typingText && (
+                    <div className="px-4 py-1 text-xs text-muted-foreground animate-pulse border-t bg-muted/30">
+                        {typingText}
+                    </div>
+                )}
+
                 <div className="p-3 border-t flex-shrink-0 space-y-1">
                     <div className="flex gap-2">
                         <Input
+                            ref={inputRef}
                             placeholder="Type a message..."
                             value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
+                            onChange={handleInputChange}
                             onKeyDown={handleKeyDown}
                             maxLength={MAX_MESSAGE_LENGTH + 10} // Allow slight overflow to show error
                             disabled={isSending}

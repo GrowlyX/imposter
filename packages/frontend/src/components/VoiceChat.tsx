@@ -37,15 +37,14 @@ function AudioLevelIndicator({ level }: { level: number }) {
             {Array.from({ length: bars }).map((_, i) => (
                 <div
                     key={i}
-                    className={`w-1 rounded-full transition-all duration-75 ${
-                        i < activeLevel
-                            ? i < 2
-                                ? 'bg-green-500'
-                                : i < 4
-                                  ? 'bg-yellow-500'
-                                  : 'bg-red-500'
-                            : 'bg-muted'
-                    }`}
+                    className={`w-1 rounded-full transition-all duration-75 ${i < activeLevel
+                        ? i < 2
+                            ? 'bg-green-500'
+                            : i < 4
+                                ? 'bg-yellow-500'
+                                : 'bg-red-500'
+                        : 'bg-muted'
+                        }`}
                     style={{ height: `${((i + 1) / bars) * 100}%` }}
                 />
             ))}
@@ -88,6 +87,34 @@ interface Participant {
     name?: string;
     audioEnabled?: boolean;
     customParticipantId?: string;
+    audioTrack?: MediaStreamTrack;
+}
+
+// Component to play remote participant audio
+function RemoteAudioPlayer({ participant }: { participant: Participant }) {
+    const audioRef = useRef<HTMLAudioElement>(null);
+
+    useEffect(() => {
+        const audioTrack = participant.audioTrack;
+        if (!audioTrack || !audioRef.current) return;
+
+        console.log('[VoiceChat] Setting up audio for participant:', participant.name);
+
+        // Create MediaStream from the audio track
+        const stream = new MediaStream([audioTrack]);
+        audioRef.current.srcObject = stream;
+        audioRef.current.play().catch(err => {
+            console.error('[VoiceChat] Failed to play audio:', err);
+        });
+
+        return () => {
+            if (audioRef.current) {
+                audioRef.current.srcObject = null;
+            }
+        };
+    }, [participant.audioTrack, participant.name]);
+
+    return <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />;
 }
 
 // Inner component that uses RealtimeKit hooks
@@ -102,108 +129,98 @@ function VoiceChatConnected({
     const [isMuted, setIsMuted] = useState(false);
     const [audioLevel, setAudioLevel] = useState(0);
     const [participants, setParticipants] = useState<Participant[]>([]);
+    const [participantCount, setParticipantCount] = useState(0);
     const animationFrameRef = useRef<number | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
 
-    // Subscribe to participant updates directly from meeting object
+    // Use selector for reactive participant count
+    const joinedCount = useRealtimeKitSelector((m) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const joined = (m as any).participants?.joined;
+        if (joined instanceof Map) {
+            return joined.size;
+        }
+        return 0;
+    });
+
+    // Update when count changes
+    useEffect(() => {
+        setParticipantCount(joinedCount);
+
+        // Re-read participants when count changes
+        if (meeting) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const joined = (meeting as any).participants?.joined;
+            if (joined instanceof Map) {
+                const list = Array.from(joined.values()) as Participant[];
+                console.log('[VoiceChat] Participants updated, count:', list.length, list);
+                setParticipants(list);
+            }
+        }
+    }, [joinedCount, meeting]);
+
+    // Subscribe to participant events
     useEffect(() => {
         if (!meeting) return;
 
-        // Log the meeting structure for debugging
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const m = meeting as any;
-        console.log(
-            '[VoiceChat] Meeting object keys:',
-            Object.keys(m).filter((k) => !k.startsWith('_'))
-        );
 
-        // Try to access participants
-        const participantsObj = m.participants;
-        console.log('[VoiceChat] Participants object:', participantsObj);
-        console.log('[VoiceChat] Participants type:', typeof participantsObj);
+        console.log('[VoiceChat] Setting up participant subscriptions');
+        console.log('[VoiceChat] meeting.participants:', m.participants);
+        console.log('[VoiceChat] meeting.participants.joined:', m.participants?.joined);
+        console.log('[VoiceChat] joined size:', m.participants?.joined?.size);
 
-        if (participantsObj) {
-            console.log('[VoiceChat] Participants keys:', Object.keys(participantsObj));
-
-            // Check for 'joined' map
-            if (participantsObj.joined) {
-                console.log('[VoiceChat] joined type:', typeof participantsObj.joined);
-                console.log('[VoiceChat] joined is Map:', participantsObj.joined instanceof Map);
-                if (participantsObj.joined instanceof Map) {
-                    console.log('[VoiceChat] joined size:', participantsObj.joined.size);
-                    const arr = Array.from(participantsObj.joined.values());
-                    console.log('[VoiceChat] joined values:', arr);
-                }
-            }
-
-            // Check for 'all'
-            if (participantsObj.all) {
-                console.log('[VoiceChat] all:', participantsObj.all);
-            }
-        }
-
-        // Function to update participants
+        // Get initial participants
         const updateParticipants = () => {
-            try {
-                const pObj = m.participants;
-                if (!pObj) return;
-
-                let participantList: Participant[] = [];
-
-                // Try 'joined' first (Map)
-                if (pObj.joined instanceof Map) {
-                    participantList = Array.from(pObj.joined.values());
-                }
-                // Try 'all' (might be an array)
-                else if (Array.isArray(pObj.all)) {
-                    participantList = pObj.all;
-                }
-                // Try 'toArray' method
-                else if (typeof pObj.toArray === 'function') {
-                    participantList = pObj.toArray();
-                }
-                // Try iterating if it's iterable
-                else if (pObj[Symbol.iterator]) {
-                    participantList = Array.from(pObj);
-                }
-
-                console.log('[VoiceChat] Updated participants:', participantList.length);
-                setParticipants(participantList);
-            } catch (error) {
-                console.error('[VoiceChat] Error updating participants:', error);
+            const joined = m.participants?.joined;
+            if (joined instanceof Map) {
+                const list = Array.from(joined.values()) as Participant[];
+                console.log('[VoiceChat] Updated participants:', list.length);
+                setParticipants(list);
             }
         };
 
-        // Initial update
         updateParticipants();
 
-        // Subscribe to participant events if available
+        // Subscribe to participant join events
+        const onParticipantJoined = (participant: Participant) => {
+            console.log('[VoiceChat] Participant joined:', participant);
+            updateParticipants();
+        };
+
+        const onParticipantLeft = (participant: Participant) => {
+            console.log('[VoiceChat] Participant left:', participant);
+            updateParticipants();
+        };
+
+        // Try subscribing to the joined map directly
+        if (m.participants?.joined?.on) {
+            console.log('[VoiceChat] Subscribing to joined.on events');
+            m.participants.joined.on('participantJoined', onParticipantJoined);
+            m.participants.joined.on('participantLeft', onParticipantLeft);
+        }
+
+        // Also try the participants object
         if (m.participants?.on) {
-            m.participants.on('participantJoined', updateParticipants);
-            m.participants.on('participantLeft', updateParticipants);
-            m.participants.on('update', updateParticipants);
+            console.log('[VoiceChat] Subscribing to participants.on events');
+            m.participants.on('participantJoined', onParticipantJoined);
+            m.participants.on('participantLeft', onParticipantLeft);
         }
 
-        // Also try subscribing at meeting level
-        if (m.on) {
-            m.on('participantJoined', updateParticipants);
-            m.on('participantLeft', updateParticipants);
-        }
-
-        // Polling fallback every 2 seconds
+        // Polling fallback
         const pollInterval = setInterval(updateParticipants, 2000);
 
         return () => {
             clearInterval(pollInterval);
-            if (m.participants?.off) {
-                m.participants.off('participantJoined', updateParticipants);
-                m.participants.off('participantLeft', updateParticipants);
-                m.participants.off('update', updateParticipants);
+            if (m.participants?.joined?.off) {
+                m.participants.joined.off('participantJoined', onParticipantJoined);
+                m.participants.joined.off('participantLeft', onParticipantLeft);
             }
-            if (m.off) {
-                m.off('participantJoined', updateParticipants);
-                m.off('participantLeft', updateParticipants);
+            if (m.participants?.off) {
+                m.participants.off('participantJoined', onParticipantJoined);
+                m.participants.off('participantLeft', onParticipantLeft);
             }
         };
     }, [meeting]);
@@ -308,13 +325,16 @@ function VoiceChatConnected({
                         Other Participants ({participants.length})
                     </p>
                     {participants.map((participant, idx) => (
-                        <ParticipantItem
-                            key={participant.id || idx}
-                            name={participant.name || 'Unknown'}
-                            isSelf={false}
-                            audioLevel={0}
-                            isMuted={participant.audioEnabled === false}
-                        />
+                        <div key={participant.id || idx}>
+                            <ParticipantItem
+                                name={participant.name || 'Unknown'}
+                                isSelf={false}
+                                audioLevel={0}
+                                isMuted={participant.audioEnabled === false}
+                            />
+                            {/* Audio player for this participant */}
+                            <RemoteAudioPlayer participant={participant} />
+                        </div>
                     ))}
                 </div>
             )}
@@ -336,7 +356,7 @@ function VoiceChatConnected({
 
             {/* Debug info */}
             <p className="text-xs text-muted-foreground/50 text-center">
-                Participants: {participants.length}
+                Joined: {participantCount} | Displayed: {participants.length}
             </p>
         </div>
     );
@@ -386,7 +406,22 @@ export function VoiceChat({ roomId, playerId, playerName }: VoiceChatProps) {
                 },
             });
 
-            console.log('[VoiceChat] Meeting initialized:', mtg);
+            console.log('[VoiceChat] Meeting client initialized, now joining room...');
+
+            // IMPORTANT: Must call join() to actually connect to the room
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if ((mtg as any)?.join) {
+                await (mtg as any).join();
+                console.log('[VoiceChat] Successfully joined room!');
+            } else {
+                console.log('[VoiceChat] No join method found on meeting object');
+            }
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            console.log(
+                '[VoiceChat] participants.joined size after join:',
+                (mtg as any)?.participants?.joined?.size
+            );
 
             setConnectionState('connected');
             toast.success('Connected to voice chat!');

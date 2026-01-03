@@ -52,6 +52,31 @@ class ChatEventEmitter {
     }
 }
 
+// Typing state for typing indicators
+export interface TypingState {
+    playerId: string;
+    playerName: string;
+    isTyping: boolean;
+}
+
+// Type-safe event emitter for typing indicators
+class TypingEventEmitter {
+    private emitter = new EventEmitter();
+
+    emit(roomId: string, state: TypingState): void {
+        this.emitter.emit(roomId, state);
+    }
+
+    on(roomId: string, handler: (state: TypingState) => void): void {
+        this.emitter.on(roomId, handler);
+    }
+
+    off(roomId: string, handler: (state: TypingState) => void): void {
+        this.emitter.off(roomId, handler);
+    }
+}
+
 export const roomEvents = new RoomEventEmitter();
 export const gameEvents = new GameEventEmitter();
 export const chatEvents = new ChatEventEmitter();
+export const typingEvents = new TypingEventEmitter();
