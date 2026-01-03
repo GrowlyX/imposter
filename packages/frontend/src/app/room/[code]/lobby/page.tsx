@@ -1,15 +1,22 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
+import { trpcMutation, trpcQuery } from '@/lib/api';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { trpcQuery, trpcMutation } from '@/lib/api';
 
 interface Player {
     id: string;
@@ -61,8 +68,10 @@ export default function LobbyPage() {
     const [editCategories, setEditCategories] = useState<string[] | null>(null);
     const [errors, setErrors] = useState<ValidationErrors>({});
 
-    const playerId = typeof window !== 'undefined' ? localStorage.getItem('imposter_player_id') : null;
-    const storedRoomId = typeof window !== 'undefined' ? localStorage.getItem('imposter_room_id') : null;
+    const playerId =
+        typeof window !== 'undefined' ? localStorage.getItem('imposter_player_id') : null;
+    const storedRoomId =
+        typeof window !== 'undefined' ? localStorage.getItem('imposter_room_id') : null;
 
     const isHost = room?.hostId === playerId;
 
@@ -107,14 +116,16 @@ export default function LobbyPage() {
             (editGameType !== null && editGameType !== room.settings.gameType) ||
             (editImposterCount !== null && editImposterCount !== room.settings.imposterCount) ||
             editDiscussionTime !== room.settings.discussionTimeSeconds.toString() ||
-            (editCategories !== null && JSON.stringify(editCategories) !== JSON.stringify(room.settings.categories))
+            (editCategories !== null &&
+                JSON.stringify(editCategories) !== JSON.stringify(room.settings.categories))
         );
     }, [room, editGameType, editImposterCount, editDiscussionTime, editCategories]);
 
     // Check if form is valid
     const isFormValid = useMemo(() => {
         const timeError = validateDiscussionTime(editDiscussionTime);
-        const catError = currentCategories.length === 0 ? 'Select at least one category' : undefined;
+        const catError =
+            currentCategories.length === 0 ? 'Select at least one category' : undefined;
         return !timeError && !catError;
     }, [editDiscussionTime, currentCategories]);
 
@@ -127,7 +138,11 @@ export default function LobbyPage() {
 
         const fetchRoom = async () => {
             try {
-                const roomData = await trpcQuery<RoomData>('room.getState', { roomId: storedRoomId }, { 'x-player-id': playerId || '' });
+                const roomData = await trpcQuery<RoomData>(
+                    'room.getState',
+                    { roomId: storedRoomId },
+                    { 'x-player-id': playerId || '' }
+                );
                 setRoom(roomData);
 
                 if (roomData?.state === 'playing') {
@@ -174,9 +189,7 @@ export default function LobbyPage() {
     const handleCategoryToggle = (cat: string) => {
         const currentCats = editCategories ?? room?.settings.categories ?? [];
         const isSelected = currentCats.includes(cat);
-        const newCats = isSelected
-            ? currentCats.filter((c) => c !== cat)
-            : [...currentCats, cat];
+        const newCats = isSelected ? currentCats.filter((c) => c !== cat) : [...currentCats, cat];
 
         setEditCategories(newCats);
 
@@ -214,7 +227,11 @@ export default function LobbyPage() {
 
         setIsSaving(true);
         try {
-            await trpcMutation('room.updateSettings', { roomId: storedRoomId, settings: updates }, { 'x-player-id': playerId });
+            await trpcMutation(
+                'room.updateSettings',
+                { roomId: storedRoomId, settings: updates },
+                { 'x-player-id': playerId }
+            );
             toast.success('Settings updated!');
             setShowSettingsDialog(false);
         } catch (error) {
@@ -253,7 +270,9 @@ export default function LobbyPage() {
                 <Card className="w-full max-w-md">
                     <CardHeader>
                         <CardTitle>Room Not Found</CardTitle>
-                        <CardDescription>This room doesn&apos;t exist or has expired.</CardDescription>
+                        <CardDescription>
+                            This room doesn&apos;t exist or has expired.
+                        </CardDescription>
                     </CardHeader>
                     <CardContent>
                         <Button onClick={() => router.push('/')} className="w-full">
@@ -300,19 +319,24 @@ export default function LobbyPage() {
                             {room.players.map((player) => (
                                 <div
                                     key={player.id}
-                                    className={`flex items-center justify-between p-3 rounded-lg ${player.id === playerId ? 'bg-primary/10 border border-primary/20' : 'bg-muted/50'
-                                        }`}
+                                    className={`flex items-center justify-between p-3 rounded-lg ${
+                                        player.id === playerId
+                                            ? 'bg-primary/10 border border-primary/20'
+                                            : 'bg-muted/50'
+                                    }`}
                                 >
                                     <div className="flex items-center gap-2">
-                                        <div className={`w-2 h-2 rounded-full ${player.isConnected ? 'bg-green-500' : 'bg-gray-500'}`} />
+                                        <div
+                                            className={`w-2 h-2 rounded-full ${player.isConnected ? 'bg-green-500' : 'bg-gray-500'}`}
+                                        />
                                         <span className="font-medium">{player.name}</span>
                                         {player.id === playerId && (
-                                            <Badge variant="outline" className="text-xs">You</Badge>
+                                            <Badge variant="outline" className="text-xs">
+                                                You
+                                            </Badge>
                                         )}
                                     </div>
-                                    {player.isHost && (
-                                        <Badge>Host</Badge>
-                                    )}
+                                    {player.isHost && <Badge>Host</Badge>}
                                 </div>
                             ))}
                         </CardContent>
@@ -325,26 +349,41 @@ export default function LobbyPage() {
                                 <div>
                                     <CardTitle>Game Settings</CardTitle>
                                     <CardDescription>
-                                        {isHost ? 'Configure the game before starting' : 'Waiting for host to start'}
+                                        {isHost
+                                            ? 'Configure the game before starting'
+                                            : 'Waiting for host to start'}
                                     </CardDescription>
                                 </div>
                                 {isHost && (
-                                    <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
+                                    <Dialog
+                                        open={showSettingsDialog}
+                                        onOpenChange={setShowSettingsDialog}
+                                    >
                                         <DialogTrigger asChild>
-                                            <Button variant="outline" size="sm">⚙️ Edit</Button>
+                                            <Button variant="outline" size="sm">
+                                                ⚙️ Edit
+                                            </Button>
                                         </DialogTrigger>
                                         <DialogContent className="max-w-md">
                                             <DialogHeader>
                                                 <DialogTitle>Game Settings</DialogTitle>
-                                                <DialogDescription>Configure the game options</DialogDescription>
+                                                <DialogDescription>
+                                                    Configure the game options
+                                                </DialogDescription>
                                             </DialogHeader>
                                             <div className="space-y-5 pt-4">
                                                 {/* Game Type */}
                                                 <div>
-                                                    <label className="text-sm font-medium">Game Type</label>
+                                                    <label className="text-sm font-medium">
+                                                        Game Type
+                                                    </label>
                                                     <div className="flex gap-2 mt-2">
                                                         <Button
-                                                            variant={currentGameType === 'word' ? 'default' : 'outline'}
+                                                            variant={
+                                                                currentGameType === 'word'
+                                                                    ? 'default'
+                                                                    : 'outline'
+                                                            }
                                                             onClick={() => setEditGameType('word')}
                                                             className="flex-1"
                                                             type="button"
@@ -352,8 +391,14 @@ export default function LobbyPage() {
                                                             🎯 Word
                                                         </Button>
                                                         <Button
-                                                            variant={currentGameType === 'question' ? 'default' : 'outline'}
-                                                            onClick={() => setEditGameType('question')}
+                                                            variant={
+                                                                currentGameType === 'question'
+                                                                    ? 'default'
+                                                                    : 'outline'
+                                                            }
+                                                            onClick={() =>
+                                                                setEditGameType('question')
+                                                            }
                                                             className="flex-1"
                                                             type="button"
                                                         >
@@ -364,13 +409,21 @@ export default function LobbyPage() {
 
                                                 {/* Imposter Count */}
                                                 <div>
-                                                    <label className="text-sm font-medium">Number of Imposters</label>
+                                                    <label className="text-sm font-medium">
+                                                        Number of Imposters
+                                                    </label>
                                                     <div className="flex gap-2 mt-2">
                                                         {[1, 2, 3].map((count) => (
                                                             <Button
                                                                 key={count}
-                                                                variant={currentImposterCount === count ? 'default' : 'outline'}
-                                                                onClick={() => setEditImposterCount(count)}
+                                                                variant={
+                                                                    currentImposterCount === count
+                                                                        ? 'default'
+                                                                        : 'outline'
+                                                                }
+                                                                onClick={() =>
+                                                                    setEditImposterCount(count)
+                                                                }
                                                                 className="flex-1"
                                                                 type="button"
                                                             >
@@ -382,7 +435,9 @@ export default function LobbyPage() {
 
                                                 {/* Discussion Time */}
                                                 <div>
-                                                    <label className="text-sm font-medium">Discussion Time (seconds)</label>
+                                                    <label className="text-sm font-medium">
+                                                        Discussion Time (seconds)
+                                                    </label>
                                                     <Input
                                                         type="text"
                                                         inputMode="numeric"
@@ -393,22 +448,33 @@ export default function LobbyPage() {
                                                         placeholder="30-600"
                                                     />
                                                     {errors.discussionTime && (
-                                                        <p className="text-sm text-red-500 mt-1">{errors.discussionTime}</p>
+                                                        <p className="text-sm text-red-500 mt-1">
+                                                            {errors.discussionTime}
+                                                        </p>
                                                     )}
                                                 </div>
 
                                                 {/* Categories */}
                                                 <div>
-                                                    <label className="text-sm font-medium">Categories</label>
+                                                    <label className="text-sm font-medium">
+                                                        Categories
+                                                    </label>
                                                     <div className="flex flex-wrap gap-2 mt-2">
                                                         {CATEGORIES.map((cat) => {
-                                                            const isSelected = currentCategories.includes(cat);
+                                                            const isSelected =
+                                                                currentCategories.includes(cat);
                                                             return (
                                                                 <Button
                                                                     key={cat}
-                                                                    variant={isSelected ? 'default' : 'outline'}
+                                                                    variant={
+                                                                        isSelected
+                                                                            ? 'default'
+                                                                            : 'outline'
+                                                                    }
                                                                     size="sm"
-                                                                    onClick={() => handleCategoryToggle(cat)}
+                                                                    onClick={() =>
+                                                                        handleCategoryToggle(cat)
+                                                                    }
                                                                     type="button"
                                                                 >
                                                                     {cat}
@@ -417,14 +483,18 @@ export default function LobbyPage() {
                                                         })}
                                                     </div>
                                                     {errors.categories && (
-                                                        <p className="text-sm text-red-500 mt-1">{errors.categories}</p>
+                                                        <p className="text-sm text-red-500 mt-1">
+                                                            {errors.categories}
+                                                        </p>
                                                     )}
                                                 </div>
 
                                                 <Button
                                                     className="w-full"
                                                     onClick={handleUpdateSettings}
-                                                    disabled={!hasChanges || !isFormValid || isSaving}
+                                                    disabled={
+                                                        !hasChanges || !isFormValid || isSaving
+                                                    }
                                                 >
                                                     {isSaving ? 'Saving...' : 'Save Settings'}
                                                 </Button>
@@ -438,7 +508,9 @@ export default function LobbyPage() {
                             <div className="grid grid-cols-2 gap-4 text-sm">
                                 <div className="p-3 rounded-lg bg-muted/50">
                                     <p className="text-muted-foreground">Game Type</p>
-                                    <p className="font-medium capitalize">{room.settings.gameType}</p>
+                                    <p className="font-medium capitalize">
+                                        {room.settings.gameType}
+                                    </p>
                                 </div>
                                 <div className="p-3 rounded-lg bg-muted/50">
                                     <p className="text-muted-foreground">Imposters</p>
@@ -446,11 +518,15 @@ export default function LobbyPage() {
                                 </div>
                                 <div className="p-3 rounded-lg bg-muted/50">
                                     <p className="text-muted-foreground">Discussion Time</p>
-                                    <p className="font-medium">{room.settings.discussionTimeSeconds}s</p>
+                                    <p className="font-medium">
+                                        {room.settings.discussionTimeSeconds}s
+                                    </p>
                                 </div>
                                 <div className="p-3 rounded-lg bg-muted/50">
                                     <p className="text-muted-foreground">Show Category</p>
-                                    <p className="font-medium">{room.settings.showCategoryToImposter ? 'Yes' : 'No'}</p>
+                                    <p className="font-medium">
+                                        {room.settings.showCategoryToImposter ? 'Yes' : 'No'}
+                                    </p>
                                 </div>
                             </div>
 
@@ -460,7 +536,9 @@ export default function LobbyPage() {
                                 <p className="text-sm text-muted-foreground mb-2">Categories</p>
                                 <div className="flex flex-wrap gap-2">
                                     {room.settings.categories.map((cat) => (
-                                        <Badge key={cat} variant="secondary">{cat}</Badge>
+                                        <Badge key={cat} variant="secondary">
+                                            {cat}
+                                        </Badge>
                                     ))}
                                 </div>
                             </div>
@@ -478,7 +556,11 @@ export default function LobbyPage() {
                                 onClick={handleStartGame}
                                 disabled={isStarting || room.players.length < 2}
                             >
-                                {isStarting ? 'Starting...' : room.players.length < 2 ? 'Need at least 2 players' : '🚀 Start Game'}
+                                {isStarting
+                                    ? 'Starting...'
+                                    : room.players.length < 2
+                                      ? 'Need at least 2 players'
+                                      : '🚀 Start Game'}
                             </Button>
                         </CardContent>
                     </Card>
@@ -487,7 +569,9 @@ export default function LobbyPage() {
                 {!isHost && (
                     <Card>
                         <CardContent className="pt-6 text-center">
-                            <p className="text-muted-foreground">Waiting for host to start the game...</p>
+                            <p className="text-muted-foreground">
+                                Waiting for host to start the game...
+                            </p>
                         </CardContent>
                     </Card>
                 )}

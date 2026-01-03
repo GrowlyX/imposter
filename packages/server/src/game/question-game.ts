@@ -1,5 +1,5 @@
-import type { GameState, RoomData } from '../types/index.js';
 import { getRandomQuestionPair } from '../data/categories.js';
+import type { GameState, RoomData } from '../types/index.js';
 
 export interface QuestionGameResult {
     gameState: GameState;
@@ -42,7 +42,7 @@ export function initializeQuestionGame(
         playerData.set(playerId, {
             isImposter,
             question: isImposter ? question2 : question1,
-            category: settings.showCategoryToImposter ? category : (isImposter ? '' : category),
+            category: settings.showCategoryToImposter ? category : isImposter ? '' : category,
         });
     }
 
@@ -60,11 +60,7 @@ export function initializeQuestionGame(
     return { gameState, playerData };
 }
 
-export function submitAnswer(
-    gameState: GameState,
-    playerId: string,
-    answer: string
-): GameState {
+export function submitAnswer(gameState: GameState, playerId: string, answer: string): GameState {
     return {
         ...gameState,
         answers: {
@@ -74,10 +70,7 @@ export function submitAnswer(
     };
 }
 
-export function checkAllPlayersAnswered(
-    gameState: GameState,
-    playerCount: number
-): boolean {
+export function checkAllPlayersAnswered(gameState: GameState, playerCount: number): boolean {
     return Object.keys(gameState.answers ?? {}).length >= playerCount;
 }
 

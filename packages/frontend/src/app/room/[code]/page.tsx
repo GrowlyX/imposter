@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { trpcMutation } from '@/lib/api';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { trpcMutation, trpcQuery } from '@/lib/api';
 
 export default function JoinRoomPage() {
     const router = useRouter();
@@ -93,7 +93,9 @@ export default function JoinRoomPage() {
                     <CardHeader className="text-center">
                         <CardTitle>Room Not Found</CardTitle>
                         <CardDescription>
-                            The room with code <span className="font-mono font-bold">{roomCode}</span> doesn&apos;t exist or has expired.
+                            The room with code{' '}
+                            <span className="font-mono font-bold">{roomCode}</span> doesn&apos;t
+                            exist or has expired.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -121,7 +123,8 @@ export default function JoinRoomPage() {
                     </div>
                     <CardTitle className="text-2xl">Join Room</CardTitle>
                     <CardDescription>
-                        You&apos;ve been invited to join room <span className="font-mono font-bold text-primary">{roomCode}</span>
+                        You&apos;ve been invited to join room{' '}
+                        <span className="font-mono font-bold text-primary">{roomCode}</span>
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -141,11 +144,7 @@ export default function JoinRoomPage() {
                     >
                         {isJoining ? 'Joining...' : 'Join Game'}
                     </Button>
-                    <Button
-                        variant="ghost"
-                        className="w-full"
-                        onClick={() => router.push('/')}
-                    >
+                    <Button variant="ghost" className="w-full" onClick={() => router.push('/')}>
                         Go Home
                     </Button>
                 </CardContent>

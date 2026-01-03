@@ -10,9 +10,12 @@
         "lint": "bun --filter '*' lint",
         "typecheck": "bun --filter '*' typecheck",
         "dev:server": "bun --filter @imposter/server dev",
-        "dev:frontend": "bun --filter @imposter/frontend dev"
+        "dev:frontend": "bun --filter @imposter/frontend dev",
+        "format": "prettier --write \"packages/**/*.{ts,tsx,js,jsx,json,css,md}\""
     },
     "devDependencies": {
+        "prettier": "^3.4.2",
+        "prettier-plugin-organize-imports": "^4.1.0",
         "typescript": "^5.9.3"
     }
 }

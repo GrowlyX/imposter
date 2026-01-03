@@ -1,23 +1,21 @@
-import { z } from 'zod';
-import { router, publicProcedure, authedProcedure } from '../trpc.js';
-import { generateRoomCode, saveRoom, getRoomByCode, getRoomById } from '../lib/redis.js';
-import { config } from '../config.js';
-import { nanoid } from 'nanoid';
 import { TRPCError } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
+import { nanoid } from 'nanoid';
+import { z } from 'zod';
+import { config } from '../config.js';
 import { roomEvents } from '../events.js';
-import {
-    type RoomData,
-    defaultGameSettings,
-    gameSettingsSchema
-} from '../types/index.js';
+import { generateRoomCode, getRoomByCode, getRoomById, saveRoom } from '../lib/redis.js';
+import { authedProcedure, publicProcedure, router } from '../trpc.js';
+import { type RoomData, defaultGameSettings, gameSettingsSchema } from '../types/index.js';
 
 export const roomRouter = router({
     // Create a new room
     create: publicProcedure
-        .input(z.object({
-            playerName: z.string().min(1).max(30),
-        }))
+        .input(
+            z.object({
+                playerName: z.string().min(1).max(30),
+            })
+        )
         .mutation(async ({ input }) => {
             const roomId = nanoid();
             const playerId = nanoid();
@@ -56,10 +54,12 @@ export const roomRouter = router({
 
     // Join an existing room
     join: publicProcedure
-        .input(z.object({
-            code: z.string().length(6),
-            playerName: z.string().min(1).max(30),
-        }))
+        .input(
+            z.object({
+                code: z.string().length(6),
+                playerName: z.string().min(1).max(30),
+            })
+        )
         .mutation(async ({ input }) => {
             const room = await getRoomByCode(input.code);
 
@@ -99,9 +99,11 @@ export const roomRouter = router({
 
     // Get room state
     getState: publicProcedure
-        .input(z.object({
-            roomId: z.string(),
-        }))
+        .input(
+            z.object({
+                roomId: z.string(),
+            })
+        )
         .query(async ({ input }) => {
             const room = await getRoomById(input.roomId);
 
@@ -117,10 +119,12 @@ export const roomRouter = router({
 
     // Update game settings (host only)
     updateSettings: authedProcedure
-        .input(z.object({
-            roomId: z.string(),
-            settings: gameSettingsSchema.partial(),
-        }))
+        .input(
+            z.object({
+                roomId: z.string(),
+                settings: gameSettingsSchema.partial(),
+            })
+        )
         .mutation(async ({ input, ctx }) => {
             const room = await getRoomById(input.roomId);
 
@@ -161,9 +165,11 @@ export const roomRouter = router({
 
     // Subscribe to room updates
     onUpdate: publicProcedure
-        .input(z.object({
-            roomId: z.string(),
-        }))
+        .input(
+            z.object({
+                roomId: z.string(),
+            })
+        )
         .subscription(({ input }) => {
             return observable<RoomData>((emit) => {
                 const handler = (room: RoomData) => {

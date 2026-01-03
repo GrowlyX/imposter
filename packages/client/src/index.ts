@@ -1,13 +1,13 @@
 /**
  * @imposter/client - tRPC client for Imposter Game
- * 
+ *
  * Type-safe client using tRPC's recommended inference patterns.
  */
 
-import { createTRPCClient, httpBatchLink, wsLink, createWSClient, splitLink } from '@trpc/client';
-import superjson from 'superjson';
 import type { AppRouter } from '@imposter/server/src/router.js';
+import { createTRPCClient, createWSClient, httpBatchLink, splitLink, wsLink } from '@trpc/client';
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
+import superjson from 'superjson';
 
 // Type inference helpers (tRPC recommended pattern)
 export type RouterInput = inferRouterInputs<AppRouter>;
@@ -25,11 +25,7 @@ export type GameSettings = RoomData['settings'];
 export type ChatMessage = RouterOutput['chat']['send'];
 
 // Client factory
-export function createClient(options: {
-    url: string;
-    playerId?: string;
-    roomId?: string;
-}) {
+export function createClient(options: { url: string; playerId?: string; roomId?: string }) {
     const wsClient = createWSClient({
         url: options.url.replace('http', 'ws'),
     });

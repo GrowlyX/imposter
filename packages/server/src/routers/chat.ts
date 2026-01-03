@@ -1,19 +1,21 @@
-import { z } from 'zod';
-import { router, authedProcedure } from '../trpc.js';
-import { getRoomById, saveChatMessage, getChatHistory } from '../lib/redis.js';
 import { TRPCError } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
-import { chatEvents } from '../events.js';
-import type { ChatMessage } from '../types/index.js';
 import { nanoid } from 'nanoid';
+import { z } from 'zod';
+import { chatEvents } from '../events.js';
+import { getChatHistory, getRoomById, saveChatMessage } from '../lib/redis.js';
+import { authedProcedure, router } from '../trpc.js';
+import type { ChatMessage } from '../types/index.js';
 
 export const chatRouter = router({
     // Send a chat message
     send: authedProcedure
-        .input(z.object({
-            roomId: z.string(),
-            content: z.string().min(1).max(512),
-        }))
+        .input(
+            z.object({
+                roomId: z.string(),
+                content: z.string().min(1).max(512),
+            })
+        )
         .mutation(async ({ input, ctx }) => {
             const room = await getRoomById(input.roomId);
 
@@ -46,18 +48,22 @@ export const chatRouter = router({
 
     // Get chat history
     getHistory: authedProcedure
-        .input(z.object({
-            roomId: z.string(),
-        }))
+        .input(
+            z.object({
+                roomId: z.string(),
+            })
+        )
         .query(async ({ input }) => {
             return getChatHistory(input.roomId);
         }),
 
     // Subscribe to new messages
     onMessage: authedProcedure
-        .input(z.object({
-            roomId: z.string(),
-        }))
+        .input(
+            z.object({
+                roomId: z.string(),
+            })
+        )
         .subscription(({ input }) => {
             return observable<ChatMessage>((emit) => {
                 const handler = (message: ChatMessage) => {

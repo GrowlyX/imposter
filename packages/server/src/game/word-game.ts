@@ -1,5 +1,5 @@
-import type { GameState, RoomData } from '../types/index.js';
 import { getRandomWord } from '../data/categories.js';
+import type { GameState, RoomData } from '../types/index.js';
 
 export interface WordGameResult {
     gameState: GameState;
@@ -44,7 +44,12 @@ export function initializeWordGame(
             isImposter,
             word: isImposter ? null : word,
             hint: isImposter && settings.showHintToImposter ? hint : null,
-            category: isImposter && settings.showCategoryToImposter ? category : (isImposter ? null : category),
+            category:
+                isImposter && settings.showCategoryToImposter
+                    ? category
+                    : isImposter
+                      ? null
+                      : category,
         });
     }
 
@@ -61,10 +66,7 @@ export function initializeWordGame(
     return { gameState, playerData };
 }
 
-export function checkAllPlayersConfirmed(
-    gameState: GameState,
-    playerCount: number
-): boolean {
+export function checkAllPlayersConfirmed(gameState: GameState, playerCount: number): boolean {
     return (gameState.confirmedPlayers?.length ?? 0) >= playerCount;
 }
 

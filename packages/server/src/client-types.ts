@@ -14,7 +14,7 @@ export type RoomJoinOutput = RouterOutput['room']['join'];
 export type RoomGetStateInput = RouterInput['room']['getState'];
 export type RoomData = RouterOutput['room']['getState'];
 
-// Game types  
+// Game types
 export type GameStartInput = RouterInput['game']['start'];
 export type GameStartOutput = RouterOutput['game']['start'];
 

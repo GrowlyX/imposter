@@ -1,11 +1,22 @@
-import { z } from 'zod';
-import { router, authedProcedure } from '../trpc.js';
-import { getRoomById, saveRoom } from '../lib/redis.js';
 import { TRPCError } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
+import { z } from 'zod';
 import { gameEvents, roomEvents } from '../events.js';
-import { initializeWordGame, checkAllPlayersConfirmed, startDiscussionPhase, startRevealPhase } from '../game/word-game.js';
-import { initializeQuestionGame, submitAnswer, checkAllPlayersAnswered, startQuestionDiscussionPhase, startQuestionRevealPhase } from '../game/question-game.js';
+import {
+    checkAllPlayersAnswered,
+    initializeQuestionGame,
+    startQuestionDiscussionPhase,
+    startQuestionRevealPhase,
+    submitAnswer,
+} from '../game/question-game.js';
+import {
+    checkAllPlayersConfirmed,
+    initializeWordGame,
+    startDiscussionPhase,
+    startRevealPhase,
+} from '../game/word-game.js';
+import { getRoomById, saveRoom } from '../lib/redis.js';
+import { authedProcedure, router } from '../trpc.js';
 import type { GameState } from '../types/index.js';
 
 // In-memory storage for player-specific game data (not shared with all players)
@@ -18,9 +29,11 @@ export function getPlayerGameData(roomId: string, playerId: string): any {
 export const gameRouter = router({
     // Start the game (host only)
     start: authedProcedure
-        .input(z.object({
-            roomId: z.string(),
-        }))
+        .input(
+            z.object({
+                roomId: z.string(),
+            })
+        )
         .mutation(async ({ input, ctx }) => {
             const room = await getRoomById(input.roomId);
 
@@ -29,7 +42,10 @@ export const gameRouter = router({
             }
 
             if (room.hostId !== ctx.playerId) {
-                throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the host can start the game' });
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'Only the host can start the game',
+                });
             }
 
             if (room.state !== 'lobby') {
@@ -42,7 +58,10 @@ export const gameRouter = router({
             }
 
             if (room.settings.imposterCount >= playerCount) {
-                throw new TRPCError({ code: 'BAD_REQUEST', message: 'Imposter count must be less than player count' });
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'Imposter count must be less than player count',
+                });
             }
 
             // Initialize game based on type
@@ -86,9 +105,11 @@ export const gameRouter = router({
 
     // Get player's personal game data (word/question, role)
     getMyData: authedProcedure
-        .input(z.object({
-            roomId: z.string(),
-        }))
+        .input(
+            z.object({
+                roomId: z.string(),
+            })
+        )
         .query(async ({ input, ctx }) => {
             const data = getPlayerGameData(input.roomId, ctx.playerId);
             if (!data) {
@@ -99,9 +120,11 @@ export const gameRouter = router({
 
     // Confirm player has seen their word (Word Game)
     confirmWord: authedProcedure
-        .input(z.object({
-            roomId: z.string(),
-        }))
+        .input(
+            z.object({
+                roomId: z.string(),
+            })
+        )
         .mutation(async ({ input, ctx }) => {
             const room = await getRoomById(input.roomId);
 
@@ -123,7 +146,10 @@ export const gameRouter = router({
 
             const playerCount = room.players.filter((p) => p.isConnected).length;
             if (checkAllPlayersConfirmed(room.gameState, playerCount)) {
-                room.gameState = startDiscussionPhase(room.gameState, room.settings.discussionTimeSeconds);
+                room.gameState = startDiscussionPhase(
+                    room.gameState,
+                    room.settings.discussionTimeSeconds
+                );
             }
 
             await saveRoom(room);
@@ -134,10 +160,12 @@ export const gameRouter = router({
 
     // Submit answer (Question Game)
     submitAnswer: authedProcedure
-        .input(z.object({
-            roomId: z.string(),
-            answer: z.string().min(1).max(500),
-        }))
+        .input(
+            z.object({
+                roomId: z.string(),
+                answer: z.string().min(1).max(500),
+            })
+        )
         .mutation(async ({ input, ctx }) => {
             const room = await getRoomById(input.roomId);
 
@@ -153,7 +181,10 @@ export const gameRouter = router({
 
             const playerCount = room.players.filter((p) => p.isConnected).length;
             if (checkAllPlayersAnswered(room.gameState, playerCount)) {
-                room.gameState = startQuestionDiscussionPhase(room.gameState, room.settings.discussionTimeSeconds);
+                room.gameState = startQuestionDiscussionPhase(
+                    room.gameState,
+                    room.settings.discussionTimeSeconds
+                );
             }
 
             await saveRoom(room);
@@ -164,9 +195,11 @@ export const gameRouter = router({
 
     // Force reveal (host only, ends discussion early)
     forceReveal: authedProcedure
-        .input(z.object({
-            roomId: z.string(),
-        }))
+        .input(
+            z.object({
+                roomId: z.string(),
+            })
+        )
         .mutation(async ({ input, ctx }) => {
             const room = await getRoomById(input.roomId);
 
@@ -175,7 +208,10 @@ export const gameRouter = router({
             }
 
             if (room.hostId !== ctx.playerId) {
-                throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the host can force reveal' });
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'Only the host can force reveal',
+                });
             }
 
             if (room.gameState.phase !== 'discussion') {
@@ -196,9 +232,11 @@ export const gameRouter = router({
 
     // End game and return to lobby (host only)
     endGame: authedProcedure
-        .input(z.object({
-            roomId: z.string(),
-        }))
+        .input(
+            z.object({
+                roomId: z.string(),
+            })
+        )
         .mutation(async ({ input, ctx }) => {
             const room = await getRoomById(input.roomId);
 
@@ -207,7 +245,10 @@ export const gameRouter = router({
             }
 
             if (room.hostId !== ctx.playerId) {
-                throw new TRPCError({ code: 'FORBIDDEN', message: 'Only the host can end the game' });
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'Only the host can end the game',
+                });
             }
 
             room.state = 'lobby';
@@ -222,9 +263,11 @@ export const gameRouter = router({
 
     // Subscribe to game state updates
     onStateChange: authedProcedure
-        .input(z.object({
-            roomId: z.string(),
-        }))
+        .input(
+            z.object({
+                roomId: z.string(),
+            })
+        )
         .subscription(({ input }) => {
             return observable<GameState>((emit) => {
                 const handler = (state: GameState) => {

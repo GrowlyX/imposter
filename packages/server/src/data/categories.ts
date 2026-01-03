@@ -50,7 +50,7 @@ export const wordCategories: WordCategory[] = [
     {
         name: 'Christmas',
         words: [
-            { word: 'Santa Claus', hint: 'He knows if you\'ve been naughty' },
+            { word: 'Santa Claus', hint: "He knows if you've been naughty" },
             { word: 'Mistletoe', hint: 'Kiss underneath it' },
             { word: 'Reindeer', hint: 'Rudolph is one' },
             { word: 'Gingerbread', hint: 'Edible house material' },
@@ -97,8 +97,8 @@ export const questionCategories: QuestionCategory[] = [
                 question2: 'What is your biggest red flag in a partner?',
             },
             {
-                question1: 'What was the best date you\'ve ever been on?',
-                question2: 'What was the worst date you\'ve ever been on?',
+                question1: "What was the best date you've ever been on?",
+                question2: "What was the worst date you've ever been on?",
             },
             {
                 question1: 'What would you do if your partner proposed unexpectedly?',
@@ -135,7 +135,7 @@ export const questionCategories: QuestionCategory[] = [
                 question2: 'What is your biggest regret?',
             },
             {
-                question1: 'What is a risk you\'re glad you took?',
+                question1: "What is a risk you're glad you took?",
                 question2: 'What is a risk you wish you had taken?',
             },
         ],
@@ -159,10 +159,12 @@ export const questionCategories: QuestionCategory[] = [
     },
 ];
 
-export function getRandomWord(categoryNames: string[]): { word: string; hint: string; category: string } {
-    const availableCategories = wordCategories.filter((c) =>
-        categoryNames.includes(c.name)
-    );
+export function getRandomWord(categoryNames: string[]): {
+    word: string;
+    hint: string;
+    category: string;
+} {
+    const availableCategories = wordCategories.filter((c) => categoryNames.includes(c.name));
     if (availableCategories.length === 0) {
         throw new Error('No valid categories selected');
     }
@@ -180,9 +182,7 @@ export function getRandomQuestionPair(categoryNames: string[]): {
     question2: string;
     category: string;
 } {
-    const availableCategories = questionCategories.filter((c) =>
-        categoryNames.includes(c.name)
-    );
+    const availableCategories = questionCategories.filter((c) => categoryNames.includes(c.name));
     if (availableCategories.length === 0) {
         throw new Error('No valid categories selected');
     }

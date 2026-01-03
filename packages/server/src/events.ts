@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import type { RoomData, GameState, ChatMessage } from './types/index.js';
+import type { ChatMessage, GameState, RoomData } from './types/index.js';
 
 // Type-safe event emitter for room updates
 class RoomEventEmitter {

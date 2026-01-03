@@ -1,6 +1,6 @@
 import Redis from 'ioredis';
 import { config } from '../config.js';
-import type { RoomData, ChatMessage } from '../types/index.js';
+import type { ChatMessage, RoomData } from '../types/index.js';
 
 export const redis = new Redis(config.redisUrl);
 
@@ -58,7 +58,10 @@ export async function getChatHistory(roomId: string): Promise<ChatMessage[]> {
 const MEETING_PREFIX = 'meeting:';
 
 // Returns true if saved, false if meeting already exists
-export async function saveMeetingIdIfNotExists(roomId: string, meetingId: string): Promise<boolean> {
+export async function saveMeetingIdIfNotExists(
+    roomId: string,
+    meetingId: string
+): Promise<boolean> {
     const key = `${MEETING_PREFIX}${roomId}`;
     // Use SETNX (set if not exists) to prevent race conditions
     const result = await redis.setnx(key, meetingId);

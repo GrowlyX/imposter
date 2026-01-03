@@ -29,7 +29,13 @@ export const roomStateSchema = z.enum(['lobby', 'playing', 'finished']);
 export type RoomState = z.infer<typeof roomStateSchema>;
 
 // Game phase
-export const gamePhaseSchema = z.enum(['assigning', 'confirming', 'answering', 'discussion', 'reveal']);
+export const gamePhaseSchema = z.enum([
+    'assigning',
+    'confirming',
+    'answering',
+    'discussion',
+    'reveal',
+]);
 export type GamePhase = z.infer<typeof gamePhaseSchema>;
 
 // Player role

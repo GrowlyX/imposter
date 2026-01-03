@@ -7,7 +7,7 @@ export async function trpcQuery<T>(
     input: object,
     headers?: Record<string, string>
 ): Promise<T> {
-    const batchInput = JSON.stringify({ "0": { json: input } });
+    const batchInput = JSON.stringify({ '0': { json: input } });
     const url = `${SERVER_URL}/trpc/${procedure}?batch=1&input=${encodeURIComponent(batchInput)}`;
 
     const response = await fetch(url, {
@@ -38,7 +38,7 @@ export async function trpcMutation<T>(
             'Content-Type': 'application/json',
             ...headers,
         },
-        body: JSON.stringify({ "0": { json: input } }),
+        body: JSON.stringify({ '0': { json: input } }),
     });
 
     if (!response.ok) {

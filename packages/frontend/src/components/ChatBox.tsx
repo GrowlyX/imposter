@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { trpcQuery, trpcMutation } from '@/lib/api';
+import { trpcMutation, trpcQuery } from '@/lib/api';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface ChatMessage {
     id: string;
@@ -35,7 +35,11 @@ export function ChatBox({ roomId, playerId, playerName }: ChatBoxProps) {
     // Fetch chat history and poll for new messages
     const fetchMessages = useCallback(async () => {
         try {
-            const history = await trpcQuery<ChatMessage[]>('chat.getHistory', { roomId }, { 'x-player-id': playerId });
+            const history = await trpcQuery<ChatMessage[]>(
+                'chat.getHistory',
+                { roomId },
+                { 'x-player-id': playerId }
+            );
 
             // Only update if we have new messages
             const latestId = history[history.length - 1]?.id;
@@ -64,10 +68,14 @@ export function ChatBox({ roomId, playerId, playerName }: ChatBoxProps) {
 
         setIsSending(true);
         try {
-            const message = await trpcMutation<ChatMessage>('chat.send', {
-                roomId,
-                content: newMessage.trim(),
-            }, { 'x-player-id': playerId });
+            const message = await trpcMutation<ChatMessage>(
+                'chat.send',
+                {
+                    roomId,
+                    content: newMessage.trim(),
+                },
+                { 'x-player-id': playerId }
+            );
 
             // Optimistically add message
             setMessages((prev) => [...prev, message]);
@@ -96,7 +104,11 @@ export function ChatBox({ roomId, playerId, playerName }: ChatBoxProps) {
 
     const charCount = newMessage.length;
     const isOverLimit = charCount > MAX_MESSAGE_LENGTH;
-    const charIndicatorColor = isOverLimit ? 'text-red-500' : charCount > MAX_MESSAGE_LENGTH * 0.9 ? 'text-yellow-500' : 'text-muted-foreground';
+    const charIndicatorColor = isOverLimit
+        ? 'text-red-500'
+        : charCount > MAX_MESSAGE_LENGTH * 0.9
+          ? 'text-yellow-500'
+          : 'text-muted-foreground';
 
     return (
         <Card className="h-full flex flex-col">
@@ -122,15 +134,20 @@ export function ChatBox({ roomId, playerId, playerName }: ChatBoxProps) {
                                     className={`flex flex-col ${msg.playerId === playerId ? 'items-end' : 'items-start'}`}
                                 >
                                     <div
-                                        className={`max-w-[85%] rounded-lg px-3 py-2 ${msg.playerId === playerId
+                                        className={`max-w-[85%] rounded-lg px-3 py-2 ${
+                                            msg.playerId === playerId
                                                 ? 'bg-primary text-primary-foreground'
                                                 : 'bg-muted'
-                                            }`}
+                                        }`}
                                     >
                                         {msg.playerId !== playerId && (
-                                            <p className="text-xs font-medium mb-1 opacity-70">{msg.playerName}</p>
+                                            <p className="text-xs font-medium mb-1 opacity-70">
+                                                {msg.playerName}
+                                            </p>
                                         )}
-                                        <p className="text-sm break-words whitespace-pre-wrap">{msg.content}</p>
+                                        <p className="text-sm break-words whitespace-pre-wrap">
+                                            {msg.content}
+                                        </p>
                                     </div>
                                     <span className="text-xs text-muted-foreground mt-1">
                                         {formatTime(msg.timestamp)}

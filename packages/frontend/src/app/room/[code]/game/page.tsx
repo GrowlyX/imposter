@@ -1,15 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { ChatBox } from '@/components/ChatBox';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
-import { trpcQuery, trpcMutation } from '@/lib/api';
-import { ChatBox } from '@/components/ChatBox';
 import { VoiceChat } from '@/components/VoiceChat';
+import { trpcMutation, trpcQuery } from '@/lib/api';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 interface PlayerGameData {
     isImposter: boolean;
@@ -53,9 +53,14 @@ export default function GamePage() {
     const [isLoading, setIsLoading] = useState(true);
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
-    const playerId = typeof window !== 'undefined' ? localStorage.getItem('imposter_player_id') : null;
-    const playerName = typeof window !== 'undefined' ? localStorage.getItem('imposter_player_name') || 'Player' : 'Player';
-    const storedRoomId = typeof window !== 'undefined' ? localStorage.getItem('imposter_room_id') : null;
+    const playerId =
+        typeof window !== 'undefined' ? localStorage.getItem('imposter_player_id') : null;
+    const playerName =
+        typeof window !== 'undefined'
+            ? localStorage.getItem('imposter_player_name') || 'Player'
+            : 'Player';
+    const storedRoomId =
+        typeof window !== 'undefined' ? localStorage.getItem('imposter_room_id') : null;
     const isHost = room?.hostId === playerId;
 
     useEffect(() => {
@@ -67,13 +72,21 @@ export default function GamePage() {
 
             try {
                 // Fetch room state
-                const roomResult = await trpcQuery<RoomData>('room.getState', { roomId: storedRoomId }, { 'x-player-id': playerId });
+                const roomResult = await trpcQuery<RoomData>(
+                    'room.getState',
+                    { roomId: storedRoomId },
+                    { 'x-player-id': playerId }
+                );
                 setRoom(roomResult);
                 setGameState(roomResult?.gameState || null);
 
                 // Fetch player's personal game data
                 try {
-                    const playerDataResult = await trpcQuery<PlayerGameData>('game.getMyData', { roomId: storedRoomId }, { 'x-player-id': playerId });
+                    const playerDataResult = await trpcQuery<PlayerGameData>(
+                        'game.getMyData',
+                        { roomId: storedRoomId },
+                        { 'x-player-id': playerId }
+                    );
                     setPlayerData(playerDataResult);
                 } catch {
                     // Game data may not exist yet
@@ -114,7 +127,11 @@ export default function GamePage() {
     const handleConfirmWord = async () => {
         if (!storedRoomId || !playerId) return;
         try {
-            await trpcMutation('game.confirmWord', { roomId: storedRoomId }, { 'x-player-id': playerId });
+            await trpcMutation(
+                'game.confirmWord',
+                { roomId: storedRoomId },
+                { 'x-player-id': playerId }
+            );
             toast.success('Confirmed!');
         } catch (error) {
             toast.error('Failed to confirm');
@@ -124,7 +141,11 @@ export default function GamePage() {
     const handleSubmitAnswer = async () => {
         if (!storedRoomId || !playerId || !answer.trim()) return;
         try {
-            await trpcMutation('game.submitAnswer', { roomId: storedRoomId, answer: answer.trim() }, { 'x-player-id': playerId });
+            await trpcMutation(
+                'game.submitAnswer',
+                { roomId: storedRoomId, answer: answer.trim() },
+                { 'x-player-id': playerId }
+            );
             toast.success('Answer submitted!');
         } catch (error) {
             toast.error('Failed to submit answer');
@@ -134,7 +155,11 @@ export default function GamePage() {
     const handleForceReveal = async () => {
         if (!storedRoomId || !playerId) return;
         try {
-            await trpcMutation('game.forceReveal', { roomId: storedRoomId }, { 'x-player-id': playerId });
+            await trpcMutation(
+                'game.forceReveal',
+                { roomId: storedRoomId },
+                { 'x-player-id': playerId }
+            );
         } catch (error) {
             toast.error('Failed to reveal');
         }
@@ -143,7 +168,11 @@ export default function GamePage() {
     const handleEndGame = async () => {
         if (!storedRoomId || !playerId) return;
         try {
-            await trpcMutation('game.endGame', { roomId: storedRoomId }, { 'x-player-id': playerId });
+            await trpcMutation(
+                'game.endGame',
+                { roomId: storedRoomId },
+                { 'x-player-id': playerId }
+            );
             router.push(`/room/${roomCode}/lobby`);
         } catch (error) {
             toast.error('Failed to end game');
@@ -168,7 +197,8 @@ export default function GamePage() {
                 {timeLeft !== null && timeLeft > 0 && (
                     <div className="text-center mb-6">
                         <Badge variant="destructive" className="text-lg px-4 py-2">
-                            ⏱️ {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+                            ⏱️ {Math.floor(timeLeft / 60)}:
+                            {(timeLeft % 60).toString().padStart(2, '0')}
                         </Badge>
                     </div>
                 )}
@@ -181,36 +211,55 @@ export default function GamePage() {
                             <Card className="border-2 border-primary/50">
                                 <CardHeader className="text-center">
                                     <CardTitle className="text-3xl">
-                                        {playerData?.isImposter ? '🕵️ You are the IMPOSTER!' : '👤 Your Word'}
+                                        {playerData?.isImposter
+                                            ? '🕵️ You are the IMPOSTER!'
+                                            : '👤 Your Word'}
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="text-center space-y-6">
                                     {playerData?.isImposter ? (
                                         <div className="space-y-4">
-                                            <p className="text-5xl font-bold text-red-500">IMPOSTER</p>
+                                            <p className="text-5xl font-bold text-red-500">
+                                                IMPOSTER
+                                            </p>
                                             {playerData.hint && (
-                                                <p className="text-muted-foreground">Hint: {playerData.hint}</p>
+                                                <p className="text-muted-foreground">
+                                                    Hint: {playerData.hint}
+                                                </p>
                                             )}
                                             {playerData.category && (
-                                                <p className="text-muted-foreground">Category: {playerData.category}</p>
+                                                <p className="text-muted-foreground">
+                                                    Category: {playerData.category}
+                                                </p>
                                             )}
                                         </div>
                                     ) : (
                                         <div className="space-y-4">
-                                            <p className="text-5xl font-bold text-primary">{playerData?.word}</p>
+                                            <p className="text-5xl font-bold text-primary">
+                                                {playerData?.word}
+                                            </p>
                                             {playerData?.category && (
-                                                <Badge variant="secondary">{playerData.category}</Badge>
+                                                <Badge variant="secondary">
+                                                    {playerData.category}
+                                                </Badge>
                                             )}
                                         </div>
                                     )}
 
                                     {!hasConfirmed ? (
-                                        <Button size="lg" onClick={handleConfirmWord} className="w-full">
-                                            ✅ I&apos;ve Seen My {playerData?.isImposter ? 'Role' : 'Word'}
+                                        <Button
+                                            size="lg"
+                                            onClick={handleConfirmWord}
+                                            className="w-full"
+                                        >
+                                            ✅ I&apos;ve Seen My{' '}
+                                            {playerData?.isImposter ? 'Role' : 'Word'}
                                         </Button>
                                     ) : (
                                         <p className="text-muted-foreground">
-                                            Waiting for others... ({gameState.confirmedPlayers?.length}/{room?.players.length})
+                                            Waiting for others... (
+                                            {gameState.confirmedPlayers?.length}/
+                                            {room?.players.length})
                                         </p>
                                     )}
                                 </CardContent>
@@ -223,11 +272,14 @@ export default function GamePage() {
                                 <CardHeader className="text-center">
                                     <CardTitle>Answer the Question</CardTitle>
                                     <CardDescription>
-                                        {playerData?.isImposter && '🕵️ You have a different question!'}
+                                        {playerData?.isImposter &&
+                                            '🕵️ You have a different question!'}
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-6">
-                                    <p className="text-xl font-medium text-center">{playerData?.question}</p>
+                                    <p className="text-xl font-medium text-center">
+                                        {playerData?.question}
+                                    </p>
 
                                     {!hasAnswered ? (
                                         <div className="space-y-4">
@@ -238,7 +290,12 @@ export default function GamePage() {
                                                 className="text-lg"
                                                 maxLength={500}
                                             />
-                                            <Button size="lg" onClick={handleSubmitAnswer} className="w-full" disabled={!answer.trim()}>
+                                            <Button
+                                                size="lg"
+                                                onClick={handleSubmitAnswer}
+                                                className="w-full"
+                                                disabled={!answer.trim()}
+                                            >
                                                 Submit Answer
                                             </Button>
                                         </div>
@@ -255,31 +312,52 @@ export default function GamePage() {
                         {gameState?.phase === 'reveal' && (
                             <Card className="border-2 border-primary/50">
                                 <CardHeader className="text-center">
-                                    <CardTitle className="text-3xl">🎭 The Imposters Were...</CardTitle>
+                                    <CardTitle className="text-3xl">
+                                        🎭 The Imposters Were...
+                                    </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-6">
                                     <div className="grid gap-2">
-                                        {Object.entries(gameState.playerRoles || {}).map(([pid, role]) => {
-                                            const player = room?.players.find((p) => p.id === pid);
-                                            return (
-                                                <div
-                                                    key={pid}
-                                                    className={`p-4 rounded-lg text-center ${role === 'imposter' ? 'bg-red-500/20 border-2 border-red-500' : 'bg-muted/50'
+                                        {Object.entries(gameState.playerRoles || {}).map(
+                                            ([pid, role]) => {
+                                                const player = room?.players.find(
+                                                    (p) => p.id === pid
+                                                );
+                                                return (
+                                                    <div
+                                                        key={pid}
+                                                        className={`p-4 rounded-lg text-center ${
+                                                            role === 'imposter'
+                                                                ? 'bg-red-500/20 border-2 border-red-500'
+                                                                : 'bg-muted/50'
                                                         }`}
-                                                >
-                                                    <p className="font-bold text-lg">{player?.name}</p>
-                                                    <Badge variant={role === 'imposter' ? 'destructive' : 'secondary'}>
-                                                        {role === 'imposter' ? '🕵️ Imposter' : '👤 Player'}
-                                                    </Badge>
-                                                </div>
-                                            );
-                                        })}
+                                                    >
+                                                        <p className="font-bold text-lg">
+                                                            {player?.name}
+                                                        </p>
+                                                        <Badge
+                                                            variant={
+                                                                role === 'imposter'
+                                                                    ? 'destructive'
+                                                                    : 'secondary'
+                                                            }
+                                                        >
+                                                            {role === 'imposter'
+                                                                ? '🕵️ Imposter'
+                                                                : '👤 Player'}
+                                                        </Badge>
+                                                    </div>
+                                                );
+                                            }
+                                        )}
                                     </div>
 
                                     {room?.settings.gameType === 'word' && gameState.word && (
                                         <div className="text-center p-4 bg-primary/10 rounded-lg">
                                             <p className="text-muted-foreground">The word was:</p>
-                                            <p className="text-2xl font-bold text-primary">{gameState.word}</p>
+                                            <p className="text-2xl font-bold text-primary">
+                                                {gameState.word}
+                                            </p>
                                         </div>
                                     )}
 
@@ -287,13 +365,21 @@ export default function GamePage() {
                                         <div className="text-center p-4 bg-primary/10 rounded-lg space-y-2">
                                             <p className="text-muted-foreground">Real question:</p>
                                             <p className="font-medium">{gameState.realQuestion}</p>
-                                            <p className="text-muted-foreground mt-2">Imposter question:</p>
-                                            <p className="font-medium text-red-400">{gameState.imposterQuestion}</p>
+                                            <p className="text-muted-foreground mt-2">
+                                                Imposter question:
+                                            </p>
+                                            <p className="font-medium text-red-400">
+                                                {gameState.imposterQuestion}
+                                            </p>
                                         </div>
                                     )}
 
                                     {isHost && (
-                                        <Button onClick={handleEndGame} className="w-full" size="lg">
+                                        <Button
+                                            onClick={handleEndGame}
+                                            className="w-full"
+                                            size="lg"
+                                        >
                                             🔄 Play Again
                                         </Button>
                                     )}
@@ -311,25 +397,41 @@ export default function GamePage() {
                             <Card>
                                 <CardHeader className="text-center">
                                     <CardTitle>💬 Discussion Time</CardTitle>
-                                    <CardDescription>Discuss and find the imposter!</CardDescription>
+                                    <CardDescription>
+                                        Discuss and find the imposter!
+                                    </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    {room?.settings.gameType === 'question' && gameState.answers && (
-                                        <div className="space-y-2">
-                                            <p className="font-medium">Question: {gameState.realQuestion}</p>
-                                            <div className="grid gap-2 mt-4">
-                                                {Object.entries(gameState.answers).map(([pid, ans]) => {
-                                                    const player = room.players.find((p) => p.id === pid);
-                                                    return (
-                                                        <div key={pid} className="p-3 rounded-lg bg-muted/50">
-                                                            <p className="font-medium">{player?.name}</p>
-                                                            <p className="text-muted-foreground">{ans}</p>
-                                                        </div>
-                                                    );
-                                                })}
+                                    {room?.settings.gameType === 'question' &&
+                                        gameState.answers && (
+                                            <div className="space-y-2">
+                                                <p className="font-medium">
+                                                    Question: {gameState.realQuestion}
+                                                </p>
+                                                <div className="grid gap-2 mt-4">
+                                                    {Object.entries(gameState.answers).map(
+                                                        ([pid, ans]) => {
+                                                            const player = room.players.find(
+                                                                (p) => p.id === pid
+                                                            );
+                                                            return (
+                                                                <div
+                                                                    key={pid}
+                                                                    className="p-3 rounded-lg bg-muted/50"
+                                                                >
+                                                                    <p className="font-medium">
+                                                                        {player?.name}
+                                                                    </p>
+                                                                    <p className="text-muted-foreground">
+                                                                        {ans}
+                                                                    </p>
+                                                                </div>
+                                                            );
+                                                        }
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
 
                                     {room?.settings.gameType === 'word' && (
                                         <div className="text-center p-6 bg-muted/30 rounded-lg">
@@ -352,7 +454,11 @@ export default function GamePage() {
                                     </div>
 
                                     {isHost && (
-                                        <Button variant="destructive" onClick={handleForceReveal} className="w-full">
+                                        <Button
+                                            variant="destructive"
+                                            onClick={handleForceReveal}
+                                            className="w-full"
+                                        >
                                             🎭 Reveal Imposters
                                         </Button>
                                     )}

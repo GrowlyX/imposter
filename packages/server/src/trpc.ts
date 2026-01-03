@@ -1,7 +1,7 @@
 import { initTRPC, TRPCError } from '@trpc/server';
-import superjson from 'superjson';
 import type { CreateExpressContextOptions } from '@trpc/server/adapters/express';
 import type { CreateWSSContextFnOptions } from '@trpc/server/adapters/ws';
+import superjson from 'superjson';
 
 export interface Context {
     playerId: string | null;

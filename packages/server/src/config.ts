@@ -1,5 +1,5 @@
-import { z } from 'zod';
 import { nanoid } from 'nanoid';
+import { z } from 'zod';
 
 // Generate a unique server ID if not provided
 const generatedServerId = nanoid(8);

@@ -1,7 +1,8 @@
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
-import { appRouter } from './router.js';
 import { config } from './config.js';
 import { getAllCategoryNames } from './data/categories.js';
+import { getReconcilerStatus, startReconciler, stopReconciler } from './lib/reconciler.js';
+import { appRouter } from './router.js';
 
 console.log(`Imposter Game Server running on http://localhost:${config.port}`);
 console.log(`WebSocket available at ws://localhost:${config.port}/trpc`);
@@ -26,10 +27,12 @@ const server = Bun.serve({
 
         // Health check
         if (url.pathname === '/health') {
+            const reconcilerStatus = getReconcilerStatus();
             return Response.json({
                 status: 'ok',
                 timestamp: new Date().toISOString(),
                 realtimeKitConfigured: config.isRealtimeKitConfigured,
+                reconciler: reconcilerStatus,
             });
         }
 
@@ -94,9 +97,20 @@ const server = Bun.serve({
     },
 });
 
+// Start the reconciler for distributed meeting cleanup
+startReconciler();
+
 // Graceful shutdown
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
     console.log('Shutting down...');
+    await stopReconciler();
+    server.stop();
+    process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+    console.log('Shutting down (SIGINT)...');
+    await stopReconciler();
     server.stop();
     process.exit(0);
 });

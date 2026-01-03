@@ -1,17 +1,17 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
 import { trpcMutation, trpcQuery } from '@/lib/api';
 import {
-    useRealtimeKitClient,
     RealtimeKitProvider,
+    useRealtimeKitClient,
     useRealtimeKitMeeting,
     useRealtimeKitSelector,
 } from '@cloudflare/realtimekit-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 interface VoiceChatProps {
     roomId: string;
@@ -19,7 +19,13 @@ interface VoiceChatProps {
     playerName: string;
 }
 
-type ConnectionState = 'checking' | 'unavailable' | 'disconnected' | 'connecting' | 'connected' | 'error';
+type ConnectionState =
+    | 'checking'
+    | 'unavailable'
+    | 'disconnected'
+    | 'connecting'
+    | 'connected'
+    | 'error';
 
 // Audio level indicator component
 function AudioLevelIndicator({ level }: { level: number }) {
@@ -31,10 +37,15 @@ function AudioLevelIndicator({ level }: { level: number }) {
             {Array.from({ length: bars }).map((_, i) => (
                 <div
                     key={i}
-                    className={`w-1 rounded-full transition-all duration-75 ${i < activeLevel
-                            ? i < 2 ? 'bg-green-500' : i < 4 ? 'bg-yellow-500' : 'bg-red-500'
+                    className={`w-1 rounded-full transition-all duration-75 ${
+                        i < activeLevel
+                            ? i < 2
+                                ? 'bg-green-500'
+                                : i < 4
+                                  ? 'bg-yellow-500'
+                                  : 'bg-red-500'
                             : 'bg-muted'
-                        }`}
+                    }`}
                     style={{ height: `${((i + 1) / bars) * 100}%` }}
                 />
             ))}
@@ -43,16 +54,25 @@ function AudioLevelIndicator({ level }: { level: number }) {
 }
 
 // Connected participant display
-function ParticipantItem({ name, isSelf, audioLevel, isMuted }: {
+function ParticipantItem({
+    name,
+    isSelf,
+    audioLevel,
+    isMuted,
+}: {
     name: string;
     isSelf: boolean;
     audioLevel: number;
     isMuted: boolean;
 }) {
     return (
-        <div className={`flex items-center justify-between p-2 rounded-lg ${isSelf ? 'bg-primary/10' : 'bg-muted/50'}`}>
+        <div
+            className={`flex items-center justify-between p-2 rounded-lg ${isSelf ? 'bg-primary/10' : 'bg-muted/50'}`}
+        >
             <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${isMuted ? 'bg-red-500' : 'bg-green-500'}`} />
+                <div
+                    className={`w-2 h-2 rounded-full ${isMuted ? 'bg-red-500' : 'bg-green-500'}`}
+                />
                 <span className="text-sm font-medium">
                     {name} {isSelf && '(You)'}
                 </span>
@@ -63,45 +83,174 @@ function ParticipantItem({ name, isSelf, audioLevel, isMuted }: {
     );
 }
 
+interface Participant {
+    id: string;
+    name?: string;
+    audioEnabled?: boolean;
+    customParticipantId?: string;
+}
+
 // Inner component that uses RealtimeKit hooks
-function VoiceChatConnected({ playerName, onDisconnect }: { playerName: string; onDisconnect: () => void }) {
+function VoiceChatConnected({
+    playerName,
+    onDisconnect,
+}: {
+    playerName: string;
+    onDisconnect: () => void;
+}) {
     const { meeting } = useRealtimeKitMeeting();
     const [isMuted, setIsMuted] = useState(false);
     const [audioLevel, setAudioLevel] = useState(0);
+    const [participants, setParticipants] = useState<Participant[]>([]);
+    const animationFrameRef = useRef<number | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
-    const animationFrameRef = useRef<number | null>(null);
 
-    // Get participants from the meeting
-    const participants = useRealtimeKitSelector((m) => m.participants?.joined || new Map());
-    const self = useRealtimeKitSelector((m) => m.self);
-
-    // Set up audio level monitoring
+    // Subscribe to participant updates directly from meeting object
     useEffect(() => {
-        const audioTrack = self?.media?.audioTrack;
-        if (!audioTrack) return;
+        if (!meeting) return;
 
-        try {
-            audioContextRef.current = new AudioContext();
-            const source = audioContextRef.current.createMediaStreamSource(new MediaStream([audioTrack]));
-            analyserRef.current = audioContextRef.current.createAnalyser();
-            analyserRef.current.fftSize = 256;
-            source.connect(analyserRef.current);
+        // Log the meeting structure for debugging
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const m = meeting as any;
+        console.log(
+            '[VoiceChat] Meeting object keys:',
+            Object.keys(m).filter((k) => !k.startsWith('_'))
+        );
 
-            const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+        // Try to access participants
+        const participantsObj = m.participants;
+        console.log('[VoiceChat] Participants object:', participantsObj);
+        console.log('[VoiceChat] Participants type:', typeof participantsObj);
 
-            const updateLevel = () => {
-                if (analyserRef.current) {
-                    analyserRef.current.getByteFrequencyData(dataArray);
-                    const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-                    setAudioLevel(average / 255);
+        if (participantsObj) {
+            console.log('[VoiceChat] Participants keys:', Object.keys(participantsObj));
+
+            // Check for 'joined' map
+            if (participantsObj.joined) {
+                console.log('[VoiceChat] joined type:', typeof participantsObj.joined);
+                console.log('[VoiceChat] joined is Map:', participantsObj.joined instanceof Map);
+                if (participantsObj.joined instanceof Map) {
+                    console.log('[VoiceChat] joined size:', participantsObj.joined.size);
+                    const arr = Array.from(participantsObj.joined.values());
+                    console.log('[VoiceChat] joined values:', arr);
                 }
-                animationFrameRef.current = requestAnimationFrame(updateLevel);
-            };
-            updateLevel();
-        } catch (error) {
-            console.error('Failed to set up audio level monitoring:', error);
+            }
+
+            // Check for 'all'
+            if (participantsObj.all) {
+                console.log('[VoiceChat] all:', participantsObj.all);
+            }
         }
+
+        // Function to update participants
+        const updateParticipants = () => {
+            try {
+                const pObj = m.participants;
+                if (!pObj) return;
+
+                let participantList: Participant[] = [];
+
+                // Try 'joined' first (Map)
+                if (pObj.joined instanceof Map) {
+                    participantList = Array.from(pObj.joined.values());
+                }
+                // Try 'all' (might be an array)
+                else if (Array.isArray(pObj.all)) {
+                    participantList = pObj.all;
+                }
+                // Try 'toArray' method
+                else if (typeof pObj.toArray === 'function') {
+                    participantList = pObj.toArray();
+                }
+                // Try iterating if it's iterable
+                else if (pObj[Symbol.iterator]) {
+                    participantList = Array.from(pObj);
+                }
+
+                console.log('[VoiceChat] Updated participants:', participantList.length);
+                setParticipants(participantList);
+            } catch (error) {
+                console.error('[VoiceChat] Error updating participants:', error);
+            }
+        };
+
+        // Initial update
+        updateParticipants();
+
+        // Subscribe to participant events if available
+        if (m.participants?.on) {
+            m.participants.on('participantJoined', updateParticipants);
+            m.participants.on('participantLeft', updateParticipants);
+            m.participants.on('update', updateParticipants);
+        }
+
+        // Also try subscribing at meeting level
+        if (m.on) {
+            m.on('participantJoined', updateParticipants);
+            m.on('participantLeft', updateParticipants);
+        }
+
+        // Polling fallback every 2 seconds
+        const pollInterval = setInterval(updateParticipants, 2000);
+
+        return () => {
+            clearInterval(pollInterval);
+            if (m.participants?.off) {
+                m.participants.off('participantJoined', updateParticipants);
+                m.participants.off('participantLeft', updateParticipants);
+                m.participants.off('update', updateParticipants);
+            }
+            if (m.off) {
+                m.off('participantJoined', updateParticipants);
+                m.off('participantLeft', updateParticipants);
+            }
+        };
+    }, [meeting]);
+
+    // Get self info via selector
+    const selfAudioEnabled = useRealtimeKitSelector((m) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return (m as any).self?.audioEnabled ?? true;
+    });
+
+    // Update muted state from SDK
+    useEffect(() => {
+        setIsMuted(!selfAudioEnabled);
+    }, [selfAudioEnabled]);
+
+    // Set up audio level monitoring from local microphone
+    useEffect(() => {
+        let stream: MediaStream | null = null;
+
+        const setupAudioMonitoring = async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContextRef.current = new AudioContext();
+                const source = audioContextRef.current.createMediaStreamSource(stream);
+                analyserRef.current = audioContextRef.current.createAnalyser();
+                analyserRef.current.fftSize = 256;
+                source.connect(analyserRef.current);
+
+                const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+
+                const updateLevel = () => {
+                    if (analyserRef.current && !isMuted) {
+                        analyserRef.current.getByteFrequencyData(dataArray);
+                        const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+                        setAudioLevel(average / 255);
+                    } else {
+                        setAudioLevel(0);
+                    }
+                    animationFrameRef.current = requestAnimationFrame(updateLevel);
+                };
+                updateLevel();
+            } catch (error) {
+                console.error('Failed to set up audio monitoring:', error);
+            }
+        };
+
+        setupAudioMonitoring();
 
         return () => {
             if (animationFrameRef.current) {
@@ -110,33 +259,37 @@ function VoiceChatConnected({ playerName, onDisconnect }: { playerName: string; 
             if (audioContextRef.current) {
                 audioContextRef.current.close();
             }
+            if (stream) {
+                stream.getTracks().forEach((track) => track.stop());
+            }
         };
-    }, [self?.media?.audioTrack]);
+    }, [isMuted]);
 
     const toggleMute = async () => {
         try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const self = (meeting as any).self;
             if (isMuted) {
-                await self?.media?.enableAudio();
+                await self?.enableAudio?.();
             } else {
-                await self?.media?.disableAudio();
+                await self?.disableAudio?.();
             }
             setIsMuted(!isMuted);
         } catch (error) {
             console.error('Failed to toggle mute:', error);
+            setIsMuted(!isMuted);
         }
     };
 
     const handleLeave = async () => {
         try {
-            await meeting.leaveRoom();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (meeting as any).leaveRoom?.();
         } catch (error) {
             console.error('Failed to leave room:', error);
         }
         onDisconnect();
     };
-
-    // Convert participants map to array
-    const participantList = Array.from(participants.values());
 
     return (
         <div className="space-y-4">
@@ -149,16 +302,18 @@ function VoiceChatConnected({ playerName, onDisconnect }: { playerName: string; 
             />
 
             {/* Other participants */}
-            {participantList.length > 0 && (
+            {participants.length > 0 && (
                 <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">Other Participants ({participantList.length})</p>
-                    {participantList.map((participant) => (
+                    <p className="text-xs text-muted-foreground">
+                        Other Participants ({participants.length})
+                    </p>
+                    {participants.map((participant, idx) => (
                         <ParticipantItem
-                            key={participant.id}
+                            key={participant.id || idx}
                             name={participant.name || 'Unknown'}
                             isSelf={false}
                             audioLevel={0}
-                            isMuted={!participant.audioEnabled}
+                            isMuted={participant.audioEnabled === false}
                         />
                     ))}
                 </div>
@@ -174,15 +329,15 @@ function VoiceChatConnected({ playerName, onDisconnect }: { playerName: string; 
                 >
                     {isMuted ? '🔇 Unmute' : '🔊 Mute'}
                 </Button>
-                <Button
-                    variant="outline"
-                    onClick={handleLeave}
-                    className="flex-1"
-                    size="sm"
-                >
+                <Button variant="outline" onClick={handleLeave} className="flex-1" size="sm">
                     📴 Leave
                 </Button>
             </div>
+
+            {/* Debug info */}
+            <p className="text-xs text-muted-foreground/50 text-center">
+                Participants: {participants.length}
+            </p>
         </div>
     );
 }
@@ -195,7 +350,11 @@ export function VoiceChat({ roomId, playerId, playerName }: VoiceChatProps) {
     useEffect(() => {
         const checkAvailability = async () => {
             try {
-                const result = await trpcQuery<{ available: boolean }>('audio.isAvailable', {}, { 'x-player-id': playerId });
+                const result = await trpcQuery<{ available: boolean }>(
+                    'audio.isAvailable',
+                    {},
+                    { 'x-player-id': playerId }
+                );
                 setConnectionState(result.available ? 'disconnected' : 'unavailable');
             } catch {
                 setConnectionState('unavailable');
@@ -216,14 +375,18 @@ export function VoiceChat({ roomId, playerId, playerName }: VoiceChatProps) {
                 { 'x-player-id': playerId }
             );
 
+            console.log('[VoiceChat] Got auth token for meeting:', result.meetingId);
+
             // Initialize RealtimeKit meeting with the auth token
-            await initMeeting({
+            const mtg = await initMeeting({
                 authToken: result.authToken,
                 defaults: {
                     audio: true,
                     video: false,
                 },
             });
+
+            console.log('[VoiceChat] Meeting initialized:', mtg);
 
             setConnectionState('connected');
             toast.success('Connected to voice chat!');
@@ -296,7 +459,9 @@ export function VoiceChat({ roomId, playerId, playerName }: VoiceChatProps) {
                     <div className="text-center space-y-3 py-2">
                         <div className="text-4xl">🔇</div>
                         <div>
-                            <p className="text-sm font-medium text-muted-foreground">Voice chat is not configured</p>
+                            <p className="text-sm font-medium text-muted-foreground">
+                                Voice chat is not configured
+                            </p>
                             <p className="text-xs text-muted-foreground mt-1">
                                 Use the text chat to communicate with other players
                             </p>
@@ -324,14 +489,21 @@ export function VoiceChat({ roomId, playerId, playerName }: VoiceChatProps) {
 
                 {connectionState === 'connected' && meeting && (
                     <RealtimeKitProvider value={meeting}>
-                        <VoiceChatConnected playerName={playerName} onDisconnect={handleDisconnect} />
+                        <VoiceChatConnected
+                            playerName={playerName}
+                            onDisconnect={handleDisconnect}
+                        />
                     </RealtimeKitProvider>
                 )}
 
                 {connectionState === 'error' && (
                     <div className="text-center space-y-4">
                         <p className="text-sm text-red-500">Failed to connect to voice chat</p>
-                        <Button onClick={() => setConnectionState('disconnected')} variant="outline" className="w-full">
+                        <Button
+                            onClick={() => setConnectionState('disconnected')}
+                            variant="outline"
+                            className="w-full"
+                        >
                             Try Again
                         </Button>
                     </div>
