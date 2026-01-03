@@ -9,7 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@cloudflare/realtimekit-react": "^0.1.0",
+    "@cloudflare/realtimekit-react": "^1.2.2",
     "@imposter/client": "workspace:*",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-scroll-area": "^1.2.10",

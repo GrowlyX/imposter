@@ -11,7 +11,6 @@
     },
     "dependencies": {
         "@trpc/server": "^10.45.0",
-        "cloudflare": "^4.0.0",
         "cors": "^2.8.5",
         "ioredis": "^5.3.2",
         "nanoid": "^5.0.4",

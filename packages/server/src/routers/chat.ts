@@ -12,7 +12,7 @@ export const chatRouter = router({
     send: authedProcedure
         .input(z.object({
             roomId: z.string(),
-            content: z.string().min(1).max(500),
+            content: z.string().min(1).max(512),
         }))
         .mutation(async ({ input, ctx }) => {
             const room = await getRoomById(input.roomId);

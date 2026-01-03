@@ -57,13 +57,26 @@ export async function getChatHistory(roomId: string): Promise<ChatMessage[]> {
 // Meeting ID storage (Redis-backed for horizontal scaling)
 const MEETING_PREFIX = 'meeting:';
 
-export async function saveMeetingId(roomId: string, meetingId: string): Promise<void> {
+// Returns true if saved, false if meeting already exists
+export async function saveMeetingIdIfNotExists(roomId: string, meetingId: string): Promise<boolean> {
     const key = `${MEETING_PREFIX}${roomId}`;
-    await redis.set(key, meetingId);
-    await redis.expire(key, 86400); // 24 hour TTL
+    // Use SETNX (set if not exists) to prevent race conditions
+    const result = await redis.setnx(key, meetingId);
+    if (result === 1) {
+        // We set it, now add TTL
+        await redis.expire(key, 86400); // 24 hour TTL
+        return true;
+    }
+    return false;
 }
 
 export async function getMeetingId(roomId: string): Promise<string | null> {
     const key = `${MEETING_PREFIX}${roomId}`;
     return redis.get(key);
+}
+
+// For cleanup - delete meeting when room ends
+export async function deleteMeetingId(roomId: string): Promise<void> {
+    const key = `${MEETING_PREFIX}${roomId}`;
+    await redis.del(key);
 }

@@ -1,21 +1,46 @@
 import { z } from 'zod';
 import { router, authedProcedure } from '../trpc.js';
-import { getRoomById, getMeetingId, saveMeetingId } from '../lib/redis.js';
+import { getRoomById, getMeetingId, saveMeetingIdIfNotExists } from '../lib/redis.js';
 import { TRPCError } from '@trpc/server';
 import { config } from '../config.js';
-import Cloudflare from 'cloudflare';
 
-// Initialize Cloudflare client
-function getCloudflareClient(): Cloudflare | null {
-    if (!config.isRealtimeKitConfigured) {
-        return null;
-    }
-    return new Cloudflare({
-        apiToken: config.cloudflareApiToken,
+// Cloudflare RealtimeKit API base URL
+const RTK_API_BASE = 'https://api.cloudflare.com/client/v4/accounts';
+
+// Helper to make authenticated RealtimeKit API calls
+async function rtkFetch<T>(
+    endpoint: string,
+    method: 'GET' | 'POST' | 'DELETE' = 'GET',
+    body?: object
+): Promise<T> {
+    const url = `${RTK_API_BASE}/${config.cloudflareAccountId}/realtime/kit/${config.cloudflareRtkAppId}${endpoint}`;
+
+    const response = await fetch(url, {
+        method,
+        headers: {
+            'Authorization': `Bearer ${config.cloudflareApiToken}`,
+            'Content-Type': 'application/json',
+        },
+        body: body ? JSON.stringify(body) : undefined,
     });
+
+    const data = await response.json() as { success: boolean; errors?: Array<{ message: string }>; data?: T };
+
+    if (!response.ok || !data.success) {
+        const errorMessage = data.errors?.[0]?.message || `API error: ${response.status}`;
+        throw new Error(errorMessage);
+    }
+
+    return data.data as T;
 }
 
 export const audioRouter = router({
+    // Check if audio is available
+    isAvailable: authedProcedure
+        .query(() => {
+            return { available: config.isRealtimeKitConfigured };
+        }),
+
     // Join the audio call for a room
     joinCall: authedProcedure
         .input(z.object({
@@ -33,45 +58,52 @@ export const audioRouter = router({
                 throw new TRPCError({ code: 'FORBIDDEN', message: 'Not a member of this room' });
             }
 
-            const client = getCloudflareClient();
-            if (!client) {
+            if (!config.isRealtimeKitConfigured) {
                 throw new TRPCError({
                     code: 'PRECONDITION_FAILED',
-                    message: 'Audio calls not available - Cloudflare RealtimeKit not configured',
+                    message: 'Voice chat requires Cloudflare RealtimeKit configuration',
                 });
             }
 
             try {
-                // Get or create meeting for room (from Redis)
+                // Get existing meeting or create one atomically
                 let meetingId = await getMeetingId(input.roomId);
 
                 if (!meetingId) {
-                    // Create new meeting via Cloudflare SDK
-                    const meetingResponse = await client.realtimeKit.meetings.create(
-                        config.cloudflareRtkAppId!,
-                        {
-                            account_id: config.cloudflareAccountId!,
-                            title: `Imposter Room ${room.code}`,
-                        }
+                    // No meeting exists - create one
+                    const meeting = await rtkFetch<{ id: string }>(
+                        '/meetings',
+                        'POST',
+                        { title: `Imposter Room ${room.code}` }
                     );
-                    meetingId = meetingResponse.id!;
-                    await saveMeetingId(input.roomId, meetingId);
+
+                    // Try to save atomically - if another request already saved one, use that instead
+                    const saved = await saveMeetingIdIfNotExists(input.roomId, meeting.id);
+
+                    if (saved) {
+                        meetingId = meeting.id;
+                    } else {
+                        // Another request beat us - use the existing meeting
+                        meetingId = await getMeetingId(input.roomId);
+                        if (!meetingId) {
+                            throw new Error('Failed to get or create meeting');
+                        }
+                    }
                 }
 
-                // Add participant via Cloudflare SDK
-                const participantResponse = await client.realtimeKit.meetings.addParticipant(
-                    config.cloudflareRtkAppId!,
-                    meetingId,
+                // Add participant to the meeting
+                const participant = await rtkFetch<{ id: string; token: string }>(
+                    `/meetings/${meetingId}/participants`,
+                    'POST',
                     {
-                        account_id: config.cloudflareAccountId!,
-                        name: player.name,
-                        preset_name: 'participant',
                         custom_participant_id: ctx.playerId,
+                        preset_name: player.isHost ? 'imp_game_vc_host' : 'imp_game_vc_participant',
+                        name: player.name,
                     }
                 );
 
                 return {
-                    authToken: participantResponse.authToken!,
+                    authToken: participant.token,
                     meetingId,
                 };
             } catch (error) {
@@ -88,9 +120,8 @@ export const audioRouter = router({
         .input(z.object({
             roomId: z.string(),
         }))
-        .mutation(async ({ input, ctx }) => {
+        .mutation(async () => {
             // Client-side SDK handles disconnection
-            // Server-side cleanup would go here if needed
             return { success: true };
         }),
 });
